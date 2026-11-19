@@ -12,12 +12,13 @@ const CONTACT={mail:'perobert@magicpallet.com',tel:'06 62 40 43 40'};
 
 /* ---------- Grille indicative (à valider) ---------- */
 const CFG={
-  reloc:[[25000,1.20],[75000,1.15],[200000,1.09],[400000,1.05],[Infinity,1.00]],
+  reloc:[[5000,1.20],[10000,1.18],[20000,1.16],[35000,1.14],[55000,1.12],[75000,1.10],[150000,1.09],[225000,1.08],[300000,1.07],[400000,1.06],[500000,1.05],[Infinity,1.00]],
   logiciel:[[1,200],[3,400],[10,700],[Infinity,1000]],
   conso:[[25000,200],[75000,250],[200000,300],[400000,500],[800000,750],[Infinity,1000]],
   moyenneGestion:1.30,seuil:495,pallPerPair:247
 };
 const tier=(t,x)=>t.find(r=>x<=r[0])[1];
+const tierLabel=(t,x)=>{const i=t.findIndex(r=>x<=r[0]),lo=i>0?t[i-1][0]:0;return i===0?`jusqu’à ${nf.format(t[0][0])} palettes par an`:t[i][0]===Infinity?`au-delà de ${nf.format(lo)} palettes par an`:`de ${nf.format(lo+1)} à ${nf.format(t[i][0])} palettes par an`};
 const DEF={volume:120000,sites:2,transporteurs:3,entrepots:5,gestionUnknown:true,gestion:1.30,heures:12,stockAuto:true,stock:0,urgence:0,perdues:0,valPal:8,tauxHoraire:45,taux:8};
 const FIELDS={volume:['Palettes livrées chez Carrefour / an',v=>nf.format(v)],sites:['Sites d’expédition',v=>v],transporteurs:['Transporteurs',v=>v],entrepots:['Entrepôts Carrefour livrés',v=>v],
  gestion:['Gestion palettes facturée (€ HT / palette)',v=>eur2(v)],gestionUnknown:['Ne connaît pas son coût gestion palettes',v=>v?'oui (moyenne 1,30 €)':'non'],heures:['Heures de suivi / mois',v=>v+' h'],
@@ -29,7 +30,7 @@ function calc(s){
   const stock=s.stockAuto?estStock(s):(+s.stock||0);
   const it={gestion:V*g,temps:(+s.heures||0)*12*(+s.tauxHoraire||0),stock:stock*(+s.valPal||0)*((+s.taux||0)/100),urgence:(+s.urgence||0)*(+s.valPal||0),perdues:V*((+s.perdues||0)/100)*(+s.valPal||0)};
   const total=Object.values(it).reduce((a,b)=>a+b,0);
-  const unit=tier(CFG.reloc,V),mp={reloc:V*unit,logiciel:12*tier(CFG.logiciel,+s.sites||1),conso:12*tier(CFG.conso,V),unit};
+  const unit=tier(CFG.reloc,V),logM=tier(CFG.logiciel,+s.sites||1),conM=tier(CFG.conso,V),mp={reloc:V*unit,logiciel:12*logM,conso:12*conM,unit,logM,conM,tierLabel:tierLabel(CFG.reloc,V)};
   mp.total=mp.reloc+mp.logiciel+mp.conso;
   const other=total-it.gestion,net=total-mp.total;
   const seuil=V>0?(mp.total-other)/V:0;
@@ -127,6 +128,17 @@ function viewSim(){
       <label>Valeur d’une palette EUR (€)<div class="inp"><input data-k="valPal" type="number" min="0" step="0.5" inputmode="decimal"></div></label>
       <label>Coût horaire chargé (€)<div class="inp"><input data-k="tauxHoraire" type="number" min="0" step="1" inputmode="decimal"></div></label>
       <label>Coût du capital (% / an)<div class="inp"><input data-k="taux" type="number" min="0" max="100" step="0.5" inputmode="decimal"></div></label></div></details></section>
+    <section class="panel"><h2>Ce que vous paieriez avec MagicPallet</h2><div class="cards">
+      <div class="card"><div class="ch"><span class="bd">${ic('sync',18)}</span><div><h3>Relocalisation</h3><p>Par palette relocalisée et livrée</p></div></div>
+        <div class="big"><b id="mp-r-pu">–</b><span>HT / palette</span></div><p class="hint" id="mp-r-tier"></p><span class="chip" id="mp-r-an"></span></div>
+      <div class="card"><div class="ch"><span class="bd">${ic('cells',18)}</span><div><h3>Logiciel de gestion</h3><p>Abonnement mensuel, selon vos sites d’expédition</p></div></div>
+        <div class="big"><b id="mp-l-m">–</b><span>HT / mois</span></div><p class="hint" id="mp-l-sub"></p><span class="chip" id="mp-l-an"></span></div>
+      <div class="card"><div class="ch"><span class="bd">${ic('coins',18)}</span><div><h3>Consolidation et avances</h3><p>Mensualité liée à votre engagement annuel</p></div></div>
+        <div class="big"><b id="mp-c-m">–</b><span>HT / mois</span></div><p class="hint" id="mp-c-sub"></p><span class="chip" id="mp-c-an"></span></div>
+    </div>
+    <div class="mp-total"><div><span>Coût MagicPallet estimé</span><b id="mp-t">–</b></div><p id="mp-t-sub"></p></div>
+    <details class="adv" id="adv-vol"><summary>${ic('chev',14)}<span>Et si mon volume varie ?</span></summary><ul class="rules"><li>Entre 90 % et 100 % de votre engagement, rien de plus à payer.</li><li>Au-delà, le même tarif s’applique, et un palier supérieur vous est proposé.</li><li>En dessous de 90 %, un ajustement s’applique : il est détaillé dans votre proposition.</li></ul></details>
+    <p class="fine" style="margin-top:12px">Le simulateur suppose que vous relocalisez exactement votre engagement annuel.</p></section>
   </div>
   <aside class="sim-out"><div class="res" id="res">
     <div class="res-hero"><span class="k">Gain net estimé par an</span><strong id="r-net">–</strong><span class="sub" id="r-sub"></span></div>
@@ -165,6 +177,7 @@ function bindSim(){
     S[k]=n;inp.value=n;userTouched=true;update(k);if(lastTracked[k]!==n){Tr.log('input_change',{k,from:lastTracked[k],to:n});lastTracked[k]=n}}));
   $('#b-est').addEventListener('click',()=>{S.stockAuto=true;Tr.log('stock_estimate',{value:estStock(S)});syncInputs();userTouched=true;update('stock')});
   $('#adv').addEventListener('toggle',e=>{if($('#adv').open)Tr.log('advanced_open')});
+  $('#adv-vol').addEventListener('toggle',()=>{if($('#adv-vol').open)Tr.log('advanced_open',{what:'volume'})});
   $('#b-contact').addEventListener('click',()=>openContact('simulation'));
   $('#b-export').addEventListener('click',exportCsv);
 }
@@ -184,6 +197,10 @@ function update(k){
   $('#c-stock').textContent=`= ${eur(r.it.stock)} par an de coût d’immobilisation`;
   $('#c-urgence').textContent=`= ${eur(r.it.urgence)} par an`;
   $('#c-perdues').textContent=`= ${eur(r.it.perdues)} par an`;
+  $('#mp-r-pu').textContent=eur2(r.mp.unit);$('#mp-r-tier').textContent=`Palier ${r.mp.tierLabel}. Tarif fixé pour 12 mois, selon votre engagement annuel.`;$('#mp-r-an').textContent=`= ${eur(r.mp.reloc)} par an`;
+  $('#mp-l-m').textContent=eur(r.mp.logM);$('#mp-l-sub').textContent=`Tranche de ${S.sites} site${S.sites>1?'s':''} d’expédition.`;$('#mp-l-an').textContent=`= ${eur(r.mp.logiciel)} par an`;
+  $('#mp-c-m').textContent=eur(r.mp.conM);$('#mp-c-sub').textContent=`Selon votre engagement de ${nf.format(r.V)} palettes par an.`;$('#mp-c-an').textContent=`= ${eur(r.mp.conso)} par an`;
+  $('#mp-t').textContent=eur(r.mp.total)+' par an';$('#mp-t-sub').textContent=r.V?`soit ${eur2(r.mp.total/r.V)} par palette. Ce coût entre dans le calcul de votre gain.`:'';
   const net=$('#r-net');net.textContent=sgn(r.net);net.classList.toggle('neg',r.net<0);
   $('#r-sub').textContent=r.V?`soit ${r.perPal>=0?'+':'−'}${eur2(Math.abs(r.perPal))} par palette · ${r.pct>=0?'':'−'}${Math.abs(r.pct).toFixed(0)} % de vos coûts actuels`:'';
   const msg=$('#r-msg');msg.classList.toggle('neg',r.net<=0);
@@ -209,7 +226,7 @@ async function exportCsv(){
   const r=calc(S),rows=[['Paramètre','Valeur']];
   for(const k of ['volume','sites','transporteurs','entrepots','gestion','heures','stock','urgence','perdues','valPal','tauxHoraire','taux']){const v=k==='stock'?r.stock:k==='gestion'?r.g:S[k];rows.push([FIELDS[k][0],v])}
   rows.push([],['Résultat','Montant annuel (€)'],['Gestion palettes facturée',Math.round(r.it.gestion)],['Temps de suivi',Math.round(r.it.temps)],['Stock immobilisé',Math.round(r.it.stock)],['Achats d’urgence',Math.round(r.it.urgence)],['Palettes non récupérées',Math.round(r.it.perdues)],['Total coûts actuels',Math.round(r.total)],
-   ['Relocalisation MagicPallet',Math.round(r.mp.reloc)],['Logiciel MagicPallet',Math.round(r.mp.logiciel)],['Consolidation MagicPallet',Math.round(r.mp.conso)],['Total MagicPallet',Math.round(r.mp.total)],['Gain net estimé',Math.round(r.net)],['Seuil de rentabilité (€ / palette)',r.seuil.toFixed(2)]);
+   ['Relocalisation MagicPallet',Math.round(r.mp.reloc)],['Logiciel MagicPallet',Math.round(r.mp.logiciel)],['Consolidation MagicPallet',Math.round(r.mp.conso)],['Total MagicPallet',Math.round(r.mp.total)],['Tarif de relocalisation (€ HT / palette)',r.mp.unit.toFixed(2)],['Abonnement logiciel (€ HT / mois)',r.mp.logM],['Consolidation et avances (€ HT / mois)',r.mp.conM],['Gain net estimé',Math.round(r.net)],['Seuil de rentabilité (€ / palette)',r.seuil.toFixed(2)]);
   Tr.log('export');
   try{const blob=new Blob(['\ufeff'+rows.map(x=>x.map(csvEsc).join(';')).join('\n')],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='simulation-magicpallet.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);toast('Simulation enregistrée')}catch(e){toast('Enregistrement indisponible')}
 }
@@ -273,7 +290,7 @@ const EVT=e=>{const f=k=>FIELDS[k]?FIELDS[k][0]:k,fv=(k,v)=>FIELDS[k]?FIELDS[k][
   case'input_change':return`Modifie « ${esc(f(e.k))} » : ${e.from==null?'–':esc(fv(e.k,e.from))} → <b>${esc(fv(e.k,e.to))}</b>`;
   case'simulation':return`Simulation : gain net <b>${sgn(e.net)}</b> par an, seuil ${eur2(e.seuil)}`;
   case'stock_estimate':return'Utilise l’estimation du stock immobilisé';
-  case'advanced_open':return'Ouvre les hypothèses avancées';
+  case'advanced_open':return e.what==='volume'?'Ouvre « Et si mon volume varie ? »':'Ouvre les hypothèses avancées';
   case'locked_click':return`Clique sur le menu verrouillé « ${esc(MODS[e.module]?MODS[e.module].n:e.module)} »`;
   case'teaser_cta':return`Demande une démo du module « ${esc(MODS[e.module]?MODS[e.module].n:e.module)} »`;
   case'export':return'Enregistre sa simulation (CSV)';
