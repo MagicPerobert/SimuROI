@@ -65,6 +65,8 @@ try {
   assert.ok(csv.includes('Laiterie du Val') && csv.includes('LDC')); ok('export CSV');
   const adm = await (await call('/admin', { headers: auth })).text(); assert.ok(adm.includes('data-admin="1"')); ok('page /admin');
   assert.ok(!(await (await call('/')).text()).includes('data-admin')); ok('page publique sans mode admin');
+  for (const f of ['/favicon.ico', '/favicon-32.png', '/apple-touch-icon.png', '/icon-512.png']) assert.equal((await call(f)).status, 200);
+  const man = await call('/site.webmanifest'); assert.equal(man.status, 200); assert.equal((await man.json()).short_name, 'MagicPallet'); ok('icônes et manifeste servis');
 
   assert.equal((await call('/api/admin/prospects/' + r.id, { method: 'DELETE', headers: auth })).status, 200);
   assert.equal((await pool.query('SELECT COUNT(*)::int c FROM events')).rows[0].c, 0); ok('suppression RGPD en cascade');

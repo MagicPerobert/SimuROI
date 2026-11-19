@@ -4,8 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>Simuler mes économies – MagicPallet</title>
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<title>Simuler mes économies · MagicPallet</title>
+<meta name="theme-color" content="#02075D">
+<meta name="application-name" content="MagicPallet">
+<meta name="apple-mobile-web-app-title" content="MagicPallet">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
@@ -14,24 +21,26 @@
 <body>
 <div class="shell">
   <aside class="side" id="side">
-    <div class="brand"><span class="bw"><img src="/logo.png" alt="MagicPallet"></span></div>
+    <button class="side-x" id="side-x" type="button" aria-label="Fermer le menu"></button><div class="brand"><span class="bw"><img src="/logo.png" alt="MagicPallet"></span></div>
     <nav class="nav" id="nav" aria-label="Navigation"></nav>
     <div class="side-foot"><button class="btn side" id="b-side-contact"></button></div>
   </aside>
   <div class="main">
     <header class="top">
       <button class="hb" id="hb" aria-label="Ouvrir le menu"></button>
-      <span class="pill"><i class="dot"></i><span id="who">Espace découverte</span></span>
-      <button class="tb" id="tb-info" aria-label="Aide et contact"></button>
+      <button class="btn primary sm" id="tb-talk" type="button"></button>
+      <div class="acct" id="acct"><div class="acct-b" aria-hidden="true"><span class="av sk"></span><span class="acct-t"><i class="sk" style="width:92px;height:12px"></i><i class="sk" style="width:64px;height:10px;margin-top:6px"></i></span></div></div>
       <span class="lang" aria-hidden="true">fr</span>
     </header>
-    <main id="view"></main>
+    <main id="view"><div class="skl" aria-hidden="true"><i class="sk" style="width:34%;height:16px"></i><i class="sk" style="width:58%;height:38px"></i><i class="sk" style="width:46%;height:16px"></i><div class="skl-g"><i class="sk" style="height:300px;border-radius:22px"></i><i class="sk" style="height:300px;border-radius:22px"></i></div></div></main>
   </div>
 </div>
 <div class="scrim" id="scrim"></div>
+<div class="side-scrim" id="side-scrim"></div>
 <aside class="drawer" id="drawer" aria-live="polite"></aside>
 <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
 <div class="toast" id="toast" role="status"></div>
+<div class="mbar hide off" id="mbar"><div><small id="mb-l">Seuil de rentabilité</small><b id="mb-net">–</b></div><button class="btn primary sm" id="mb-go" type="button">Voir le détail</button></div>
 <script src="/app.js" defer></script>
 </body>
 </html>

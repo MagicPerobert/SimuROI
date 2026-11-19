@@ -83,7 +83,7 @@ async function notifyContact(p, ev) {
   const url = process.env.NOTIFY_WEBHOOK_URL;
   if (!url) return;
   const who = [p.first_name, p.last_name].filter(Boolean).join(' ') || 'Visiteur';
-  const text = `Demande de contact : ${who} (${p.company || '–'}) · contexte : ${ev.ctx || 'simulation'} · ${ev.tel || ev.email || p.email || 'sans coordonnée'}${ev.msg ? ' · « ' + ev.msg + ' »' : ''}`;
+  const text = `Demande de contact : ${who} (${p.company || '–'}) · contexte : ${ev.ctx === 'demo' ? 'démo de la plateforme' + (ev.from ? ' (depuis ' + ev.from + ')' : '') : ev.ctx || 'simulation'} · ${ev.mode === 'rdv' ? 'rendez-vous souhaité : ' + [ev.date, ev.slot].filter(Boolean).join(', ') + ' · ' : ''}${ev.tel || ev.email || p.email || 'sans coordonnée'}${ev.msg ? ' · « ' + ev.msg + ' »' : ''}`;
   try { await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, content: text }) }); } catch { /* best effort */ }
 }
 

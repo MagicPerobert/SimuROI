@@ -37,6 +37,14 @@ En ligne de commande : `railway init`, `railway add -d postgres`, `railway up`, 
 - Suppression d'un prospect et de tout son historique : fiche → *Supprimer*. Suppression automatique après `RETENTION_DAYS` jours d'inactivité (365 par défaut).
 - À faire valider par votre DPO : mention dans votre politique de confidentialité, base légale (intérêt légitime), durée de conservation.
 
+## Logo Carrefour
+
+Le logo Carrefour s'affiche à côté de la mention « Process intégré aux accords RSE de Carrefour ». Pour le retirer, mettre `logoCarrefour:false` dans `CFG` (`public/app.js`). À faire valider par Carrefour avant diffusion à des prospects.
+
+## Exemple affiché à l'arrivée
+
+Tant que le visiteur n'a pas saisi son coût de gestion palettes, le panneau de droite montre un gain *d'exemple*, étiqueté comme tel, calculé à `exempleGestion` (1,50 € par palette, milieu de la fourchette 1 € à 2 €). Pour changer la valeur ou la retirer (retour au seuil de rentabilité seul) : `exempleGestion:null` dans `CFG` (`public/app.js`). L'exemple n'apparaît que s'il est positif.
+
 ## Adapter la grille de prix
 
 Tout est en haut de `public/app.js`, dans la constante `CFG` (paliers de relocalisation, de logiciel, de consolidation) et `DEF` (valeurs par défaut du simulateur).
