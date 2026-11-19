@@ -1,0 +1,64 @@
+# Simulateur d'économies MagicPallet : espace prospect + suivi
+
+Une petite application Node.js + PostgreSQL, prête pour Railway.
+
+- **`/`** : l'espace découverte du prospect (simulateur, menus verrouillés, demande de contact).
+- **`/p/<lien>`** : lien personnel créé par vous. Le prospect est reconnu sans rien saisir.
+- **`/admin`** : votre back office (mot de passe) : score d'intérêt, chronologie de chaque prospect, invitations, export CSV, suppression.
+
+Tout ce que fait un prospect est enregistré dans PostgreSQL : pages vues, paramètres modifiés (avec l'ancienne et la nouvelle valeur), simulations, menus verrouillés cliqués, export, demandes de contact, temps actif, retours sur d'autres jours.
+
+## Déployer sur Railway (≈ 10 minutes)
+
+1. Mettez ce dossier dans un dépôt GitHub (privé de préférence).
+2. Sur Railway : **New Project → Deploy from GitHub repo**, et choisissez le dépôt.
+3. Dans le même projet : **+ New → Database → Add PostgreSQL**.
+4. Ouvrez le service de l'application → **Variables** :
+   - `DATABASE_URL` = `${{Postgres.DATABASE_URL}}` (référence au plugin)
+   - `ADMIN_PASSWORD` = un mot de passe long (**obligatoire**)
+   - `ADMIN_USER` = `admin` (facultatif)
+   - `PUBLIC_URL` = l'adresse publique, par exemple `https://espace.magicpallet.com`
+   - `NOTIFY_WEBHOOK_URL` = un webhook Slack, Teams ou Make pour être alerté à chaque demande de contact (facultatif)
+5. **Settings → Networking → Generate Domain** (ou *Custom Domain* pour `espace.magicpallet.com`).
+6. Le schéma de base se crée tout seul au premier démarrage. Ouvrez `/admin`.
+
+En ligne de commande : `railway init`, `railway add -d postgres`, `railway up`, puis les variables du point 4.
+
+## Utilisation
+
+- **Inviter un prospect** : `/admin` → *Nouvelle invitation* → copiez le lien et envoyez-le. Sa première visite affiche un message d'accueil avec l'information sur la conservation des données ; le suivi ne démarre qu'après son clic.
+- **Lien générique** (sans invitation) : le prospect renseigne prénom et société avant d'accéder au simulateur.
+- **Score d'intérêt** (0 à 100, détaillé dans chaque fiche) : simulations (jusqu'à 30), paramètres renseignés (15), retours un autre jour (20), menus verrouillés ouverts (15), temps actif (10), simulation enregistrée (10), demande de contact (25). Chaud ≥ 70, tiède ≥ 40.
+
+## Données personnelles
+
+- Cookie technique `mp_vid` (httpOnly, 1 an) pour reconnaître le prospect. Aucune adresse IP n'est stockée.
+- Back office : blocage de 15 minutes après 5 identifiants erronés, depuis une même adresse.
+- Suppression d'un prospect et de tout son historique : fiche → *Supprimer*. Suppression automatique après `RETENTION_DAYS` jours d'inactivité (365 par défaut).
+- À faire valider par votre DPO : mention dans votre politique de confidentialité, base légale (intérêt légitime), durée de conservation.
+
+## Adapter la grille de prix
+
+Tout est en haut de `public/app.js`, dans la constante `CFG` (paliers de relocalisation, de logiciel, de consolidation) et `DEF` (valeurs par défaut du simulateur).
+
+## En local
+
+```bash
+cp .env.example .env     # puis renseignez DATABASE_URL et ADMIN_PASSWORD
+npm install
+npm start                # http://localhost:3000   (admin : /admin)
+npm test                 # test d'intégration avec un PostgreSQL embarqué
+```
+
+## Structure
+
+```
+server.js          API, administration, lien personnel, purge
+db/schema.sql      3 tables : prospects, visits, events (créées au démarrage)
+public/            interface (index.html, app.js, app.css)
+test/run.js        20 vérifications de bout en bout
+```
+
+## Intégrer plus tard dans votre SaaS
+
+Les événements sont uniformes (`type` + `data`). Pour passer cette rubrique dans votre SaaS, seule la fonction d'envoi `Tr.flush` de `public/app.js` et les 4 routes `/api/*` sont à reprendre dans votre back-end.
