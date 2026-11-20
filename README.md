@@ -24,6 +24,10 @@ Tout ce que fait un prospect est enregistré dans PostgreSQL : pages vues, param
 
 En ligne de commande : `railway init`, `railway add -d postgres`, `railway up`, puis les variables du point 4.
 
+## Se connecter et se déconnecter
+
+`/admin` demande l'identifiant et le mot de passe (`ADMIN_USER`, `ADMIN_PASSWORD`). Pour sortir : menu de compte en haut à droite → **Se déconnecter**. Si le navigateur garde la session (Safari, par exemple), fermez toutes ses fenêtres ou utilisez une fenêtre privée.
+
 ## Utilisation
 
 - **Inviter un prospect** : `/admin` → *Nouvelle invitation* → copiez le lien et envoyez-le. Sa première visite affiche un message d'accueil avec l'information sur la conservation des données ; le suivi ne démarre qu'après son clic.

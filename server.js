@@ -186,6 +186,14 @@ function adminAuth(req, res, next) {
   }
   res.set('WWW-Authenticate', 'Basic realm="MagicPallet administration", charset="UTF-8"').status(401).type('text').send('Authentification requise.');
 }
+// Déconnexion : le navigateur garde les identifiants « Basic » en mémoire ; un 401 sur une requête qui en porte les efface.
+const loggedOutPage = '<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>Déconnecté · MagicPallet</title><body style="font-family:system-ui,sans-serif;max-width:520px;margin:12vh auto;padding:0 24px;color:#02075D"><h1>Vous êtes déconnecté.</h1><p><a href="/admin">Se reconnecter</a> · <a href="/">Retour à l’espace découverte</a></p></body>';
+app.get('/admin/logout', (req, res) => {
+  noStore(res);
+  if (req.headers.authorization) res.set('WWW-Authenticate', 'Basic realm="MagicPallet administration", charset="UTF-8"').status(401);
+  res.type('html').send(loggedOutPage);
+});
+
 // Blocage 15 min après 5 identifiants erronés (seules les tentatives avec en-tête Authorization comptent).
 const failedLogins = rateLimit({ windowMs: 15 * 60_000, max: 5, skipSuccessfulRequests: true, skip: (req) => !req.headers.authorization,
   standardHeaders: true, legacyHeaders: false, message: 'Trop de tentatives. Réessayez dans quelques minutes.' });

@@ -65,6 +65,8 @@ try {
   assert.ok(csv.includes('Laiterie du Val') && csv.includes('LDC')); ok('export CSV');
   const adm = await (await call('/admin', { headers: auth })).text(); assert.ok(adm.includes('data-admin="1"')); ok('page /admin');
   assert.ok(!(await (await call('/')).text()).includes('data-admin')); ok('page publique sans mode admin');
+  const lo1 = await call('/admin/logout', { headers: auth }); assert.equal(lo1.status, 401); assert.ok((lo1.headers.get('www-authenticate') || '').startsWith('Basic')); assert.ok((await lo1.text()).includes('déconnecté'));
+  const lo2 = await call('/admin/logout'); assert.equal(lo2.status, 200); ok('déconnexion : 401 si identifiants présents, page simple sinon');
   for (const f of ['/favicon.ico', '/favicon-32.png', '/apple-touch-icon.png', '/icon-512.png']) assert.equal((await call(f)).status, 200);
   const man = await call('/site.webmanifest'); assert.equal(man.status, 200); assert.equal((await man.json()).short_name, 'MagicPallet'); ok('icônes et manifeste servis');
 

@@ -107,7 +107,8 @@ function renderAcct(){
     ${adm?'':known?'':`<button class="am-i" role="menuitem" type="button" data-am="hi">${ic('userplus',16)}<span>Me présenter</span></button>`}
     ${adm?'':`<button class="am-i" role="menuitem" type="button" data-am="contact">${ic('phone',16)}<span>Parler à un expert</span></button>`}
     <a class="am-i" role="menuitem" href="mailto:${CONTACT.mail}">${ic('mail',16)}<span>Nous écrire</span></a>
-    ${known&&!adm?`<a class="am-i" role="menuitem" href="mailto:${CONTACT.mail}?subject=${mail}">${ic('trash',16)}<span>Demander la suppression de mes données</span></a>`:''}
+    ${typeof ADMIN!=='undefined'&&ADMIN?`<a class="am-i" role="menuitem" href="/admin/logout">${ic('lock',16)}<span>Se déconnecter</span></a>`:''}
+    
   </div>`;
 }
 function closeAcct(){const m=$('#acct-m');if(!m||m.hidden)return;m.hidden=true;const b=$('#acct [data-am="toggle"]');if(b)b.setAttribute('aria-expanded','false')}
@@ -218,7 +219,7 @@ function viewSim(){
         <div class="tk-row"><span class="bd">${ic('cells',20)}</span><div class="tk-l"><b>Abonnement mensuel</b><small class="eq" id="mp-s-an"></small></div><div class="tk-v"><b id="mp-s-m">–</b><small>HT / mois</small></div></div>
         <div class="tk-sub">
           <div class="tk-line"><div><b>Usage de la plateforme</b><small id="mp-l-sub"></small></div><span class="amt"><b id="mp-l-m">–</b> / mois</span></div>
-          <div class="tk-line"><div><b>Consolidation et avance des palettes<em>service obligatoire</em></b><small id="mp-c-sub"></small></div><span class="amt"><b id="mp-c-m">–</b> / mois</span></div>
+          <div class="tk-line"><div><b>Consolidation et avance des palettes</b><small id="mp-c-sub"></small></div><span class="amt"><b id="mp-c-m">–</b> / mois</span></div>
         </div>
         <div class="tk-total"><div><small>Coût MagicPallet estimé</small><b id="mp-t">–</b></div><p id="mp-t-sub"></p></div>
       </div>
@@ -226,7 +227,7 @@ function viewSim(){
       <p class="nudge" id="nudge"></p>
       <details class="adv slim" id="adv-incl"><summary>${ic('chev',14)}<span>Ce que comprend votre abonnement</span></summary><ul class="incl">
         <li><b>Usage de la plateforme</b> : tableau de bord, flux et soldes, stocks, carte, coûts et bilan carbone, pour tous les types de supports de manutention.</li>
-        <li><b>Consolidation et avance des palettes</b> : le service MagicPallet sans lequel le process Carrefour ne fonctionne pas.</li>
+        <li><b>Consolidation et avance des palettes</b> : votre solde consolidé sur tous les entrepôts Carrefour, et les palettes avancées par MagicPallet.</li>
         <li><b>Au-delà de Carrefour</b> : la plateforme gère aussi vos autres partenaires et vos autres flux ; les conditions se précisent avec votre expert.</li></ul></details>
       <details class="adv slim" id="adv-stair"><summary>${ic('chev',14)}<span>Voir les paliers de tarif</span><em id="stair-c"></em></summary>
         <div class="stair" id="stair" role="img" aria-label="Paliers de tarif de relocalisation selon le volume annuel"></div>
