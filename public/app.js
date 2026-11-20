@@ -143,14 +143,15 @@ addEventListener('hashchange',render);
 /* ---------- simulateur ---------- */
 const cardStep=(k,t,d,icon,min,max)=>`<div class="card"><div class="ch"><span class="bd">${ic(icon,18)}</span><div><h3>${t}</h3><p>${d}</p></div></div><div class="stp"><button type="button" data-step="${k}" data-d="-1" aria-label="Diminuer">${ic('minus',14)}</button><div class="inp"><input data-k="${k}" type="number" min="${min}" max="${max}" step="1" inputmode="numeric" aria-label="${t}"></div><button type="button" data-step="${k}" data-d="1" aria-label="Augmenter">${ic('plus',14)}</button></div></div>`;
 const PRESETS={small:{label:'Petit',volume:6000,sites:1,transporteurs:2,entrepots:3},mid:{label:'Moyen',volume:100000,sites:2,transporteurs:3,entrepots:5},big:{label:'Grand',volume:480000,sites:4,transporteurs:6,entrepots:10}};
-const KEYS=['volume','sites','gestion','heures','urgence','perdues','transporteurs','entrepots'];
+const KEYS=['volume','sites','gestion','heures','stock','urgence','perdues','transporteurs','entrepots'];
 const touched=new Set();
-function initTouched(){touched.clear();for(const k of KEYS){if(k==='gestion'){if(S.gestion>0)touched.add(k)}else if(S[k]!==DEF[k])touched.add(k)}}
+function initTouched(){touched.clear();for(const k of KEYS){if(k==='gestion'){if(S.gestion>0)touched.add(k)}else if(S[k]!==DEF[k])touched.add(k)}if(S.stockAuto)touched.add('stock')}
 function markTouched(k){if(k==='gestion'){S.gestion>0?touched.add(k):touched.delete(k)}else if(KEYS.includes(k))touched.add(k)}
 function nextStep(){
   if(!touched.has('volume'))return{t:'Entrez votre volume annuel',sel:'#in-volume'};
   if(!(S.gestion>0))return{t:'Ajoutez ce que vous coûte la gestion palettes',sel:'[data-k="gestion"]'};
-  if(!touched.has('heures'))return{t:'Indiquez le temps passé à relancer',sel:'[data-k="heures"]',open:true};
+  if(!touched.has('heures'))return{t:'Indiquez le temps passé à relancer',sel:'[data-k="heures"]'};
+  if(!touched.has('stock'))return{t:'Estimez votre stock immobilisé',sel:'#b-est'};
   if(!touched.has('urgence'))return{t:'Avez-vous racheté des palettes en urgence ?',sel:'[data-k="urgence"]',open:true};
   if(!touched.has('perdues'))return{t:'Quelle part des palettes ne revient jamais ?',sel:'[data-k="perdues"]',open:true};
   return{t:'Votre estimation est complète : faites-la valider',cta:true};
@@ -160,7 +161,7 @@ function updCad(){
   let big='–';
   if(c.V){big=c.D<1?`Votre solde atteint ${T} palettes en <em>${Math.ceil(12/c.perYear)} mois</em>`:c.interval>=1.5?`Une livraison de <b>${T} palettes</b> tous les <em>${fd(c.interval)} jours</em>`:`<em>${(c.perYear/365).toFixed(1).replace('.',',')} livraisons</em> de <b>${T} palettes</b> par jour`}
   $('#cad-big').innerHTML=big;
-  $('#cad-sub').textContent=c.V?(c.D<1?'Au rythme de vos expéditions, aucune livraison complète n’intervient sur les 12 prochains mois.':`Première livraison environ ${fd(c.interval)} jours après le démarrage, dès que votre solde atteint ${T} palettes. Chaque livraison est de ${T} palettes ; en fin d’année, ${nf.format(Math.round(c.rest))} palettes restent en solde, reportées sur la période suivante.`):'';
+  $('#cad-sub').textContent=c.V?(c.D<1?'Au rythme de vos expéditions, aucune livraison complète n’intervient sur les 12 prochains mois.':`Première livraison environ ${fd(c.interval)} jours après le démarrage. En fin d’année, ${nf.format(Math.round(c.rest))} palettes restent en solde, reportées.`):'';
   $('#cad-n').textContent=c.V?(c.D<1?'< 1':nf.format(c.D)):'–';
   const mx=Math.max(1,...c.months.map(m=>m.count));
   $('#cad-chart').innerHTML=c.months.map(m=>`<div class="cm" title="${esc(m.label)} : ${m.count} livraison${m.count>1?'s':''}"><b>${m.count}</b><div class="bw"><i style="height:${Math.max(3,m.count/mx*100).toFixed(0)}%"></i></div><span><em class="ml">${esc(m.label)}</em><em class="ms">${esc(m.label[0].toUpperCase())}</em></span></div>`).join('');
@@ -168,6 +169,7 @@ function updCad(){
   $('#cad-sites').innerHTML=`<div class="cs h"><span>Vos sites</span><span>Expédiées chez Carrefour</span><span>Livraisons pleines</span><span>Rythme</span></div>`+rows.join('')+(c.N>5?`<div class="cs more"><span>… et ${c.N-5} autres sites, livrés à tour de rôle</span></div>`:'');
   const n0=c.siteCounts[0],slow=c.N>1&&c.D>=1&&(n0===0||365/n0>60);
   $('#cad-tip').innerHTML=ic('arrow',14)+'<span>'+(!c.V?'Renseignez votre volume pour voir votre cadencier.':c.D<1?'Chaque livraison est de '+T+' palettes : dès que votre solde les atteint, elle est programmée sur le site de votre choix.':slow?`En regroupant vos livraisons sur un seul site, vous êtes livré tous les <b>${fd(c.interval)} jours</b> au lieu de ${n0?fd(365/n0):'jamais sur 12 mois'}. Vous choisissez le site de livraison.`:c.N>1?'Chaque livraison de '+T+' palettes va sur un seul site, à tour de rôle ou selon vos instructions. Vous indiquez à notre équipe dédiée le site de livraison.':'Vous choisissez le site de livraison : un seul, ou plusieurs selon vos besoins.')+'</span>';
+  $('#cad-tip').style.display=slow?'':'none';
 }
 function updHero(r){
   const p=Math.min(100,25+Math.round(75*touched.size/KEYS.length)),n=nextStep();
@@ -183,8 +185,8 @@ function setupSteps(){
 }
 function viewSim(){
   $('#view').innerHTML=`
-  <div class="hero-t"><div class="crumb" aria-label="Où vous êtes"><span>Plateforme MagicPallet</span><i>›</i><span>Process palettes Carrefour</span><i>›</i><b>Simulation</b></div><h1>Combien allez-vous économiser ?</h1><p class="lead">Simulation du nouveau process palettes Carrefour. Entrez votre volume et ce que vous coûte la gestion palettes : votre gain apparaît aussitôt.</p>
-   <ul class="trust"><li>${CFG.logoCarrefour?'<span class="cfpill"><img src="'+CF_IMG+'" alt="Carrefour" width="25" height="20"></span>':ic('check',13)}Process intégré aux accords RSE de Carrefour</li><li>${ic('check',13)}100 % des entrepôts Carrefour en France</li><li>${ic('check',13)}Résultat en direct, sans engagement</li></ul></div>
+  <div class="hero-t"><div class="crumb" aria-label="Où vous êtes"><span>Plateforme MagicPallet</span><i>›</i><span>Process palettes Carrefour</span><i>›</i><b>Simulation</b></div><h1>Combien allez-vous économiser ?</h1><p class="lead">Entrez votre volume et ce que vous coûte la gestion palettes : votre gain apparaît aussitôt.</p>
+   <ul class="trust"><li>${CFG.logoCarrefour?'<span class="cfpill"><img src="'+CF_IMG+'" alt="Carrefour" width="25" height="20"></span>':ic('check',13)}Process intégré aux accords RSE de Carrefour</li><li>${ic('check',13)}100 % des entrepôts Carrefour en France</li></ul></div>
   <nav class="steps" id="steps" aria-label="Étapes de la simulation"><button type="button" data-s="sec-flux"><i>1</i>Votre situation</button><button type="button" data-s="sec-mp"><i>2</i>Votre tarif</button><button type="button" data-s="sec-cad"><i>3</i>Votre cadencier</button><button type="button" data-s="sec-couts"><i>4</i>Pour affiner</button></nav>
   <div class="sim"><div>
     <section class="panel" id="sec-flux"><h2>Votre situation</h2>
@@ -194,43 +196,45 @@ function viewSim(){
         <div class="inp"><input id="in-volume" data-k="volume" type="number" min="1000" step="1000" inputmode="numeric" aria-label="Palettes livrées par an"><span>palettes / an</span></div>
         <input id="rg-volume" type="range" min="0" max="100" step="0.5" aria-label="Volume annuel (échelle logarithmique)"><div class="hint" id="h-volume"></div></div>
       ${cardStep('sites','Sites d’expédition','Fixe votre tranche d’abonnement','warehouse',1,500)}
-      <div class="card span3"><div class="ch"><span class="bd">${ic('coins',18)}</span><div><h3>Ce que vous coûte la gestion palettes, par palette</h3><p>Coût estimé d’après la ligne « gestion palettes » des factures de vos transporteurs. Un ordre de grandeur suffit.</p></div></div>
+      <div class="card span3"><div class="ch"><span class="bd">${ic('coins',18)}</span><div><h3>Ce que vous coûte la gestion palettes, par palette</h3><p>D’après la ligne « gestion palettes » des factures de vos transporteurs. Un ordre de grandeur suffit.</p></div></div>
         <div class="inp" id="w-gestion"><input data-k="gestion" type="number" min="0" step="0.05" inputmode="decimal" placeholder="à renseigner" aria-label="Coût de gestion palettes par palette"><span>€ HT / palette</span></div>
-        <p class="hint">Montant annuel de cette ligne ÷ palettes livrées. Si elle est incluse dans le prix du transport, donnez votre meilleure estimation.<span class="fine" style="display:block;margin-top:6px">À titre informatif : nous constatons généralement une fourchette de 1 € à 2 € par palette, selon les transporteurs et les contrats.</span></p><span class="chip" id="c-gestion"></span></div>
+        <p class="hint">Montant annuel de cette ligne ÷ palettes livrées.<span class="fine" style="display:block;margin-top:6px">À titre informatif : nous constatons généralement une fourchette de 1 € à 2 € par palette.</span></p><span class="chip" id="c-gestion"></span></div>
+      <div class="cards two" style="grid-column:1/-1">
+        <div class="card hasw"><button type="button" class="why" data-why="temps" aria-expanded="false" aria-label="Comment on estime le temps de suivi">?</button><div class="ch"><span class="bd">${ic('clock',18)}</span><div><h3>Temps passé à suivre les soldes et à relancer</h3><p>Rapprochements, e-mails et appels aux transporteurs, bons à récupérer</p></div></div>
+          <div class="inp"><input data-k="heures" type="number" min="0" step="1" inputmode="numeric" aria-label="Heures par mois"><span>heures / mois</span></div><p class="why-p" id="why-temps" hidden></p><span class="chip" id="c-temps"></span></div>
+        <div class="card hasw"><button type="button" class="why" data-why="stock" aria-expanded="false" aria-label="Comment on estime le stock immobilisé">?</button><div class="ch"><span class="bd">${ic('hourglass',18)}</span><div><h3>Stock de palettes immobilisé en avance</h3><p>Vos transporteurs doivent cumuler 495 palettes par entrepôt avant de vous les rendre : vous gardez un stock tampon</p></div></div>
+          <div class="row2"><div class="inp" id="w-stock"><input data-k="stock" type="number" min="0" step="50" inputmode="numeric" aria-label="Palettes immobilisées"><span>palettes</span></div><button class="btn ghost sm" type="button" id="b-est">Estimer pour moi</button></div><p class="why-p" id="why-stock" hidden></p><p class="why-p" id="est-note" hidden></p><span class="chip" id="c-stock"></span></div>
+      </div>
     </div></section>
     <section class="panel mp" id="sec-mp"><h2>Votre tarif MagicPallet</h2>
       <div class="ticket">
         <div class="tk-row"><span class="bd">${ic('sync',20)}</span><div class="tk-l"><b>Relocalisation de palettes EUR</b><small id="mp-r-tier"></small><small class="eq" id="mp-r-an"></small></div><div class="tk-v"><b id="mp-r-pu">–</b><small>HT / palette</small></div></div>
-        <div class="tk-row"><span class="bd">${ic('cells',20)}</span><div class="tk-l"><b>Abonnement mensuel</b><small>Un seul abonnement, deux composantes.</small><small class="eq" id="mp-s-an"></small></div><div class="tk-v"><b id="mp-s-m">–</b><small>HT / mois</small></div></div>
+        <div class="tk-row"><span class="bd">${ic('cells',20)}</span><div class="tk-l"><b>Abonnement mensuel</b><small class="eq" id="mp-s-an"></small></div><div class="tk-v"><b id="mp-s-m">–</b><small>HT / mois</small></div></div>
         <div class="tk-sub">
           <div class="tk-line"><div><b>Usage de la plateforme</b><small id="mp-l-sub"></small></div><span class="amt"><b id="mp-l-m">–</b> / mois</span></div>
           <div class="tk-line"><div><b>Consolidation et avance des palettes<em>service obligatoire</em></b><small id="mp-c-sub"></small></div><span class="amt"><b id="mp-c-m">–</b> / mois</span></div>
         </div>
         <div class="tk-total"><div><small>Coût MagicPallet estimé</small><b id="mp-t">–</b></div><p id="mp-t-sub"></p></div>
       </div>
-      <div class="reach"><div class="reach-h">${ic('sitemap',20)}<div><b>Votre abonnement donne accès à toute la plateforme, pas seulement à Carrefour</b><span>Le process palettes Carrefour n’est qu’un contexte d’utilisation parmi d’autres : le même outil sert tous vos besoins, tous vos partenaires et tous vos types de supports de manutention. L’usage de la plateforme ne dépend que de votre nombre de sites d’expédition.</span></div></div>
+      <div class="reach"><div class="reach-h">${ic('sitemap',20)}<div><b>Votre abonnement donne accès à toute la plateforme, pas seulement à Carrefour</b><span>Le process palettes Carrefour n’est qu’un contexte d’utilisation parmi d’autres.</span></div></div>
         <ul class="reach-l"><li>${ic('check',12)}Process palettes Carrefour</li><li>${ic('check',12)}Fournisseurs amont</li><li>${ic('check',12)}Transferts entre vos sites</li><li>${ic('check',12)}Transporteurs vers vos autres distributeurs</li><li>${ic('check',12)}Tous vos types de supports de manutention</li></ul></div>
       <div class="stair-w"><div class="stair-h"><h3>Votre palier de tarif</h3><span id="stair-c"></span></div><div class="stair" id="stair" role="img" aria-label="Paliers de tarif de relocalisation selon le volume annuel"></div>
-        <div class="stair-ax"><span>5 000</span><span>engagement annuel, en palettes →</span><span>500 000+</span></div>
+        <div class="stair-ax"><span>5 000 palettes</span><span></span><span>500 000+</span></div>
         <p class="nudge" id="nudge"></p></div>
-      <details class="adv" id="adv-vol"><summary>${ic('chev',14)}<span>Et si mon volume varie ?</span></summary><ul class="rules"><li>Entre 90 % et 100 % de votre engagement, rien de plus à payer.</li><li>Au-delà, le même tarif s’applique, et un palier supérieur vous est proposé.</li><li>En dessous de 90 %, un ajustement s’applique : il est détaillé dans votre proposition.</li></ul></details>
-      <p class="fine" style="margin-top:12px">Le simulateur suppose que vous relocalisez exactement votre engagement annuel.</p></section>
+      <details class="adv" id="adv-vol"><summary>${ic('chev',14)}<span>Et si mon volume varie ?</span></summary><ul class="rules"><li>Entre 90 % et 100 % de votre engagement, rien de plus à payer.</li><li>Au-delà, le même tarif s’applique, et un palier supérieur vous est proposé.</li><li>En dessous de 90 %, un ajustement s’applique : il est détaillé dans votre proposition.</li><li>Cette simulation suppose que vous relocalisez exactement votre engagement.</li></ul></details>
+      </section>
     <section class="panel" id="sec-cad"><h2>Votre cadencier de récupération</h2>
       <div class="cad-hero"><div><div class="big-t" id="cad-big">–</div><span class="sub" id="cad-sub"></span><span class="chip" style="display:inline-block;margin-top:10px">Rythme modulable selon vos capacités de stockage</span></div>
-        <div class="cad-k"><div><b id="cad-n">–</b><small>livraisons par an</small></div><div><b id="cad-c">${CFG.seuil}</b><small>palettes par livraison, un complet</small></div></div></div>
+        <div class="cad-k"><div><b id="cad-n">–</b><small>livraisons par an</small></div></div></div>
       <div class="cad-chart" id="cad-chart" role="img" aria-label="Livraisons prévues, mois par mois"></div>
       <div class="cad-sites" id="cad-sites"></div>
       <p class="nudge" id="cad-tip"></p>
-      <div class="cad-foot"><p class="fine">Hypothèse : vos expéditions sont linéaires sur l’année, et les livraisons pleines vont aux sites à tour de rôle. Chaque livraison est un complet de ${CFG.seuil} palettes. Avec notre équipe dédiée, vous réglez le site, la quantité et le rythme selon vos capacités de stockage et vos vraies saisonnalités.</p><button class="btn ghost sm" id="cad-more" type="button">${ic('sync',14)}<span>Voir comment ça se passe</span></button></div></section>
+      <div class="cad-foot"><p class="fine">Hypothèse : expéditions linéaires sur l’année, livraisons réparties à tour de rôle. Site, quantité et rythme se règlent avec notre équipe dédiée, selon vos capacités de stockage et votre saisonnalité.</p><button class="btn ghost sm" id="cad-more" type="button">${ic('sync',14)}<span>Voir comment ça se passe</span></button></div></section>
     <section class="panel" id="sec-couts"><h2>Pour affiner votre estimation</h2>
-    <details class="adv" id="refine"><summary>${ic('chev',14)}<span>Temps de suivi, stock, achats d’urgence, palettes perdues</span><em>facultatif</em></summary>
+    <details class="adv" id="refine"><summary>${ic('chev',14)}<span>Transporteurs, entrepôts, achats d’urgence, palettes perdues</span><em>facultatif</em></summary>
     <div class="cards two inner-g">
       ${cardStep('transporteurs','Transporteurs','Ceux qui rapatrient vos palettes','truck',1,60)}
       ${cardStep('entrepots','Entrepôts livrés','Où se cumulent vos soldes','boxes',1,80)}
-      <div class="card"><div class="ch"><span class="bd">${ic('clock',18)}</span><div><h3>Temps passé à suivre les soldes et à relancer</h3><p>Rapprochements, e-mails et appels aux transporteurs, bons à récupérer</p></div></div>
-        <div class="inp"><input data-k="heures" type="number" min="0" step="1" inputmode="numeric" aria-label="Heures par mois"><span>heures / mois</span></div><span class="chip" id="c-temps"></span></div>
-      <div class="card"><div class="ch"><span class="bd">${ic('hourglass',18)}</span><div><h3>Stock de palettes immobilisé en avance</h3><p>Vos transporteurs doivent cumuler 495 palettes par entrepôt avant de vous les rendre : vous gardez un stock tampon</p></div></div>
-        <div class="row2"><div class="inp" id="w-stock"><input data-k="stock" type="number" min="0" step="50" inputmode="numeric" aria-label="Palettes immobilisées"><span>palettes</span></div><button class="btn ghost sm" type="button" id="b-est">Estimer pour moi</button></div><span class="chip" id="c-stock"></span></div>
       <div class="card"><div class="ch"><span class="bd">${ic('cart',18)}</span><div><h3>Achats de palettes en urgence</h3><p>Quand les retours tardent et que vous rachetez pour expédier. Laissez 0 s’il n’y en a pas.</p></div></div>
         <div class="inp"><input data-k="urgence" type="number" min="0" step="10" inputmode="numeric" aria-label="Palettes achetées en urgence par an"><span>palettes / an</span></div><span class="chip" id="c-urgence"></span></div>
       <div class="card"><div class="ch"><span class="bd">${ic('boxes',18)}</span><div><h3>Palettes jamais récupérées</h3><p>Part des palettes livrées que vos transporteurs ne vous rendent jamais</p></div></div>
@@ -255,7 +259,7 @@ function viewSim(){
         <div><div class="bar-l"><span>Avec MagicPallet</span><b id="bt-m"></b></div><div class="bar" id="bar-m"></div></div>
         <div class="lg" id="lg"></div></div></details>
       <button class="btn ghost" id="b-export">${ic('download',16)}<span>Enregistrer ma simulation</span></button>
-      <p class="fine">Estimation indicative fondée sur vos hypothèses et sur notre grille tarifaire en vigueur ; gains arrondis à la centaine d’euros. Elle ne constitue pas une proposition ferme.</p>
+      <p class="fine">Estimation indicative, gains arrondis à la centaine d’euros. Elle ne constitue pas une proposition ferme.</p>
     </div></div></aside></div>`;
   initTouched();buildStair();bindSim();syncInputs();update();setupSteps();
   if(window.IntersectionObserver){if(window._io)window._io.disconnect();window._io=new IntersectionObserver(es=>$('#mbar').classList.toggle('hide',es[0].isIntersecting),{threshold:.12});window._io.observe($('#res'))}
@@ -286,7 +290,7 @@ function bindSim(){
     release();const k=b.dataset.step,inp=$(`[data-k="${k}"]`),n=clamp((+S[k]||0)+(+b.dataset.d),+inp.min,+inp.max);
     S[k]=n;inp.value=n;markTouched(k);userTouched=true;update(k);if(lastTracked[k]!==n){Tr.log('input_change',{k,from:lastTracked[k],to:n});lastTracked[k]=n}}));
   $$('#view [data-preset]').forEach(b=>b.addEventListener('click',()=>{release();const p=PRESETS[b.dataset.preset];Object.assign(S,{volume:p.volume,sites:p.sites,transporteurs:p.transporteurs,entrepots:p.entrepots});Tr.log('input_change',{k:'preset',from:null,to:p.label});syncInputs();userTouched=true;update('volume')}));
-  $('#b-est').addEventListener('click',()=>{S.stockAuto=true;Tr.log('stock_estimate',{value:estStock(S)});syncInputs();userTouched=true;update('stock')});
+  $('#b-est').addEventListener('click',()=>{S.stockAuto=true;touched.add('stock');Tr.log('stock_estimate',{value:estStock(S)});syncInputs();userTouched=true;update('stock')});
   $('#adv').addEventListener('toggle',()=>{if($('#adv').open)Tr.log('advanced_open')});
   $('#refine').addEventListener('toggle',()=>{if($('#refine').open)Tr.log('advanced_open',{what:'refine'})});
   $('#adv-vol').addEventListener('toggle',()=>{if($('#adv-vol').open)Tr.log('advanced_open',{what:'volume'})});
@@ -300,23 +304,33 @@ function syncInputs(){
   const v=$('#rg-volume');if(v)syncVolume();
 }
 function syncVolume(){$('#rg-volume').value=clamp(100*Math.log10(Math.max(1000,S.volume)/1000)/3,0,100);updHint()}
-function updHint(){$('#h-volume').textContent=`Soit environ ${nf.format(Math.round(S.volume/12))} palettes par mois, soit ${nf.format(Math.floor(S.volume/CFG.seuil))} complets de ${CFG.seuil} palettes par an.`}
+function updHint(){$('#h-volume').textContent=`Soit ${nf.format(Math.floor(S.volume/CFG.seuil))} complets de ${CFG.seuil} palettes par an.`}
+function whyHtml(k){
+  if(k==='temps')return `Coût = heures par mois × 12 × coût horaire chargé (${eur(+S.tauxHoraire||0)} par heure). Le coût horaire se modifie dans « Pour affiner », rubrique Hypothèses avancées.`;
+  return `Coût = palettes immobilisées × valeur d’une palette EUR (${eur(+S.valPal||0)}) × coût du capital (${S.taux} % par an). « Estimer pour moi » suppose que chaque couple transporteur × entrepôt cumule en moyenne ${CFG.pallPerPair} palettes avant de vous les rendre, dans la limite de 15 % de votre volume annuel.`;
+}
+document.addEventListener('click',e=>{
+  const w=e.target.closest&&e.target.closest('[data-why]');
+  if(w){const k=w.dataset.why,p=document.getElementById('why-'+k),open=p.hidden;p.hidden=!open;if(open)p.innerHTML=whyHtml(k);w.setAttribute('aria-expanded',String(open));if(open)Tr.log('advanced_open',{what:'why:'+k});return}
+  if(e.target.closest&&e.target.closest('#est-edit')){const d=$('#refine');if(d&&!d.open)d.open=true;const el=$('[data-k="transporteurs"]');if(el){el.scrollIntoView({behavior:reduceMotion?'auto':'smooth',block:'center'});setTimeout(()=>el.focus({preventScroll:true}),350)}}
+});
 function update(k){
   if(k==='transporteurs'||k==='entrepots'||k==='volume'){if(S.stockAuto)$('[data-k="stock"]').value=estStock(S)}
   const r=calc(S);saveLocal();updHero(r);updCad();
+  {const en=$('#est-note');if(en){en.hidden=!S.stockAuto;if(S.stockAuto)en.innerHTML=`Estimation : ${S.transporteurs} transporteurs × ${S.entrepots} entrepôts × ${CFG.pallPerPair} palettes, dans la limite de 15 % de votre volume. <button type="button" class="lnk" id="est-edit">Modifier</button>`}}
   $('#c-gestion').textContent=r.hasG?`= ${eur(r.it.gestion)} par an`:'À renseigner';
   $('#c-temps').textContent=`= ${eur(r.it.temps)} par an`;
   $('#c-stock').textContent=`= ${eur(r.it.stock)} par an de coût d’immobilisation`;
   $('#c-urgence').textContent=`= ${eur(r.it.urgence)} par an`;
   $('#c-perdues').textContent=`= ${eur(r.it.perdues)} par an`;
-  $('#mp-r-pu').textContent=eur2(r.mp.unit);$('#mp-r-tier').textContent=`Palier ${r.mp.tierLabel}. Tarif fixé pour 12 mois, selon votre engagement annuel.`;$('#mp-r-an').textContent=`${nf.format(r.V)} palettes × ${eur2(r.mp.unit)} = ${eur(r.mp.reloc)} par an`;
-  $('#mp-l-m').textContent=eur(r.mp.logM);$('#mp-l-sub').textContent=`Toute la plateforme, tous vos partenaires, tous vos types de supports. Prix fixe selon votre tranche : ${rangeLbl(CFG.logiciel,+S.sites||1,'site d’expédition','sites d’expédition')}.`;
-  $('#mp-c-m').textContent=eur(r.mp.conM);$('#mp-c-sub').textContent=`Nous consolidons vos soldes sur tous les entrepôts Carrefour et vous avançons les palettes, dans la limite de votre engagement : livré dès 495 palettes, sans attendre qu’un entrepôt ou un transporteur ait cumulé son complet. Selon votre engagement de ${nf.format(r.V)} palettes par an.`;
+  $('#mp-r-pu').textContent=eur2(r.mp.unit);$('#mp-r-tier').textContent=`Palier ${r.mp.tierLabel}, tarif fixé pour 12 mois.`;$('#mp-r-an').textContent=`${nf.format(r.V)} palettes × ${eur2(r.mp.unit)} = ${eur(r.mp.reloc)} par an`;
+  $('#mp-l-m').textContent=eur(r.mp.logM);$('#mp-l-sub').textContent=`Toute la plateforme, tous vos partenaires. Tranche : ${rangeLbl(CFG.logiciel,+S.sites||1,'site d’expédition','sites d’expédition')}.`;
+  $('#mp-c-m').textContent=eur(r.mp.conM);$('#mp-c-sub').textContent=`Nous consolidons vos soldes sur tous les entrepôts Carrefour et vous avançons les palettes : livré dès 495 palettes, sans attendre qu’un entrepôt ou un transporteur ait cumulé son complet.`;
   $('#mp-s-m').textContent=eur(r.mp.logM+r.mp.conM);$('#mp-s-an').textContent=`${eur(r.mp.logM+r.mp.conM)} × 12 = ${eur(r.mp.logiciel+r.mp.conso)} par an`;
-  tween($('#mp-t'),r.mp.total,v=>eur(v)+' par an');$('#mp-t-sub').textContent=r.V?`soit ${eur2(r.mp.total/r.V)} par palette. Ce coût entre dans le calcul de votre gain.`:'';
+  tween($('#mp-t'),r.mp.total,v=>eur(v)+' par an');$('#mp-t-sub').textContent=r.V?`soit ${eur2(r.mp.total/r.V)} par palette.`:'';
   $('#r-mpt').textContent=eur(r.mp.total);
   $$('#stair .st').forEach((el,k)=>{el.classList.toggle('lo',k<r.mp.ti);el.classList.toggle('cur',k===r.mp.ti);el.classList.toggle('nx',k===r.mp.ti+1)});
-  $('#stair-c').textContent=`${r.mp.tierLabel} · ${eur2(r.mp.unit)}`;
+  $('#stair-c').textContent=`${eur2(r.mp.unit)} par palette`;
   const nx=r.mp.next;$('#nudge').innerHTML=ic('arrow',14)+'<span>'+(!nx?`Vous êtes au meilleur tarif : ${eur2(r.mp.unit)} par palette.`:nx.reloc<r.mp.reloc?`À <b>${nf.format(nx.vol)} palettes</b> (+${nf.format(nx.dv)}), le tarif passe à ${eur2(nx.price)} : votre relocalisation coûterait <b>${eur(r.mp.reloc-nx.reloc)} de moins</b>.`:`À partir de <b>${nf.format(nx.vol)} palettes</b>, le tarif passe à ${eur2(nx.price)} par palette.`)+'</span>';
   const net=$('#r-net'),msg=$('#r-msg'),exg=CFG.exempleGestion,exNet=(!r.hasG&&exg&&r.V)?r.netAt(exg):null,showEx=exNet!=null&&exNet>0;
   if(r.hasG){
@@ -325,7 +339,7 @@ function update(k){
     $('#r-sub').textContent=r.V?`soit ${sgnR(r.net/12)} par mois · ${r.perPal>=0?'+':'−'}${eur2(Math.abs(r.perPal))} par palette`:'';
     msg.classList.toggle('neg',r.net<=0);
     if(r.net>0)msg.innerHTML=r.seuil<=0.5?`Sur ces hypothèses, vous restez gagnant quel que soit ce que vous coûte la gestion palettes.`:`Vous restez gagnant tant que la gestion palettes vous coûte plus de <b>${eur2(r.seuil)}</b> par palette.`;
-    else msg.innerHTML=`Sur ces hypothèses, le gain n’apparaît pas. Il faudrait que la gestion palettes vous coûte plus de <b>${eur2(r.seuil)}</b> par palette, ou que les autres postes (achats d’urgence, palettes non récupérées, temps de suivi) pèsent plus que ce que vous avez saisi. Vérifiez ces postes avant de conclure.`;
+    else msg.innerHTML=`Sur ces hypothèses, pas de gain. Il faudrait que la gestion palettes vous coûte plus de <b>${eur2(r.seuil)}</b> par palette, ou que vos autres postes pèsent davantage (voir « Pour affiner »).`;
   }else if(showEx){
     $('#hero-k').textContent='Gain annuel, à titre d’exemple';$('#mb-l').textContent='Exemple à '+eur2(exg)+' / palette';
     cancelAnimationFrame(net._r);net._v=null;net.textContent=sgnR(exNet);net.classList.remove('neg');
@@ -350,7 +364,7 @@ function update(k){
   const row=(c,n,v)=>`<span class="n" style="--c:${c}">${n}</span><span class="v">${typeof v==='string'?v:eur(v)}</span>`;
   $('#lg').innerHTML=[row('var(--s1)','Gestion palettes',r.hasG?r.it.gestion:'à renseigner'),row('var(--s2)','Temps de suivi',r.it.temps),row('var(--s3)','Stock immobilisé',r.it.stock),row('var(--s4)','Achats d’urgence',r.it.urgence),row('var(--s5)','Palettes non récupérées',r.it.perdues),
     row('var(--mint)',`Relocalisation (${eur2(r.mp.unit)} / palette)`,r.mp.reloc),row('var(--mint)','Abonnement : usage de la plateforme',r.mp.logiciel),row('var(--mint)','Abonnement : consolidation et avance',r.mp.conso)].join('');
-  $('#sens').innerHTML=`<tr><td>Seuil de rentabilité</td><td>${r.V?eur2(r.seuil):'–'} par palette</td></tr><tr><td>Chaque 10 centimes de plus par palette</td><td class="pos">${r.V?sgnR(r.V*0.1):'–'} par an</td></tr>`;
+  $('#sens').innerHTML=`<tr><td>Chaque 10 centimes de plus par palette</td><td class="pos">${r.V?sgnR(r.V*0.1):'–'} par an</td></tr>`;
   if(userTouched&&r.hasG){clearTimeout(simTimer);simTimer=setTimeout(()=>{const c=calc(S);
     Tr.log('simulation',{inputs:Object.assign({},S,{stock:c.stock}),net:Math.round(c.net),total:Math.round(c.total),mpTotal:Math.round(c.mp.total),seuil:+c.seuil.toFixed(2)});userTouched=false},1800)}
 }
@@ -447,7 +461,7 @@ const EVT=e=>{const f=k=>FIELDS[k]?FIELDS[k][0]:k,fv=(k,v)=>FIELDS[k]?FIELDS[k][
   case'input_change':return`Modifie « ${esc(f(e.k))} » : ${e.from==null?'–':esc(fv(e.k,e.from))} → <b>${esc(fv(e.k,e.to))}</b>`;
   case'simulation':return`Simulation : gain net <b>${sgn(e.net)}</b> par an, seuil ${eur2(e.seuil)}`;
   case'stock_estimate':return'Utilise l’estimation du stock immobilisé';
-  case'advanced_open':return e.what==='volume'?'Ouvre « Et si mon volume varie ? »':'Ouvre les hypothèses avancées';
+  case'advanced_open':return e.what==='volume'?'Ouvre « Et si mon volume varie ? »':(e.what||'').startsWith('why')?'Consulte « Comment on estime ? » ('+esc(e.what.slice(4))+')':'Ouvre les hypothèses avancées';
   case'locked_click':return`Clique sur le menu verrouillé « ${esc(MODS[e.module]?MODS[e.module].n:e.module)} »`;
   case'teaser_cta':return`Demande une démo de la plateforme, depuis « ${esc(MODS[e.module]?MODS[e.module].n:e.module)} »`;
   case'export':return'Enregistre sa simulation (CSV)';
