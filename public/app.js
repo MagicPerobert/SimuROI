@@ -33,16 +33,16 @@ function cadence(s){
 const rangeLbl=(t,x,one,many)=>{const i=t.findIndex(r=>x<=r[0]),lo=i>0?t[i-1][0]+1:1;return t[i][0]===Infinity?`plus de ${t[i-1][0]} ${many}`:lo===t[i][0]?`${lo} ${one}`:`${lo} à ${t[i][0]} ${many}`};
 const fd=d=>d>=10?String(Math.round(d)):d.toFixed(1).replace('.',',');
 const tierLabel=(t,x)=>{const i=t.findIndex(r=>x<=r[0]),lo=i>0?t[i-1][0]:0;return i===0?`jusqu’à ${nf.format(t[0][0])} palettes par an`:t[i][0]===Infinity?`au-delà de ${nf.format(lo)} palettes par an`:`de ${nf.format(lo+1)} à ${nf.format(t[i][0])} palettes par an`};
-const DEF={volume:120000,sites:2,transporteurs:3,entrepots:5,gestion:null,heures:0,stockAuto:false,stock:0,urgence:0,perdues:0,valPal:8,tauxHoraire:45,taux:8};
+const DEF={volume:120000,sites:2,transporteurs:3,entrepots:5,gestion:null,heures:0,stockAuto:false,stock:0,urgence:0,perdues:0,valPal:8,tauxHoraire:30,taux:8,fraisStock:8};
 const FIELDS={preset:['Exemple choisi',v=>v],volume:['Palettes livrées chez Carrefour / an',v=>nf.format(v)],sites:['Sites d’expédition',v=>v],transporteurs:['Transporteurs',v=>v],entrepots:['Entrepôts Carrefour livrés',v=>v],
  gestion:['Gestion palettes facturée (€ HT / palette)',v=>eur2(v)],heures:['Heures de suivi / mois',v=>v+' h'],
  stock:['Palettes immobilisées',v=>nf.format(v)],urgence:['Palettes achetées en urgence / an',v=>nf.format(v)],perdues:['Palettes non récupérées',v=>v+' %'],
- valPal:['Valeur d’une palette EUR',v=>eur2(v)],tauxHoraire:['Coût horaire chargé',v=>eur2(v)],taux:['Coût du capital',v=>v+' %']};
+ valPal:['Valeur d’une palette EUR',v=>eur2(v)],tauxHoraire:['Coût horaire complet',v=>eur2(v)],taux:['Coût du capital',v=>v+' %'],fraisStock:['Frais de stockage',v=>v+' %']};
 const estStock=s=>Math.round(Math.min(s.transporteurs*s.entrepots*CFG.pallPerPair,s.volume*0.15));
 function calc(s){
   const V=Math.max(0,+s.volume||0),hasG=+s.gestion>0,g=hasG?+s.gestion:0;
   const stock=s.stockAuto?estStock(s):(+s.stock||0);
-  const it={gestion:V*g,temps:(+s.heures||0)*12*(+s.tauxHoraire||0),stock:stock*(+s.valPal||0)*((+s.taux||0)/100),urgence:(+s.urgence||0)*(+s.valPal||0),perdues:V*((+s.perdues||0)/100)*(+s.valPal||0)};
+  const it={gestion:V*g,temps:(+s.heures||0)*12*(+s.tauxHoraire||0),stock:stock*(+s.valPal||0)*(((+s.taux||0)+(+s.fraisStock||0))/100),urgence:(+s.urgence||0)*(+s.valPal||0),perdues:V*((+s.perdues||0)/100)*(+s.valPal||0)};
   const total=Object.values(it).reduce((a,b)=>a+b,0);
   const unit=tier(CFG.reloc,V),logM=tier(CFG.logiciel,+s.sites||1),conM=tier(CFG.conso,V),mp={reloc:V*unit,logiciel:12*logM,conso:12*conM,unit,logM,conM,tierLabel:tierLabel(CFG.reloc,V)};
   mp.ti=Math.max(0,CFG.reloc.findIndex(x=>V<=x[0]));if(mp.ti<CFG.reloc.length-1){const lo=CFG.reloc[mp.ti][0]+1,np=CFG.reloc[mp.ti+1][1];mp.next={vol:lo,price:np,reloc:lo*np,dv:lo-V}}
@@ -53,7 +53,7 @@ function calc(s){
 }
 
 /* ---------- état local ---------- */
-const LS='mp-simulateur-v2';
+const LS='mp-simulateur-v3';
 let S=Object.assign({},DEF),PROFILE=null,WELCOME_PENDING=false;
 try{const r=JSON.parse(localStorage.getItem(LS)||'null');if(r&&r.state)S=Object.assign({},DEF,r.state)}catch(e){}
 const saveLocal=()=>{try{localStorage.setItem(LS,JSON.stringify({state:S}))}catch(e){}};
@@ -190,7 +190,7 @@ function viewSim(){
   <nav class="steps" id="steps" aria-label="Étapes de la simulation"><button type="button" data-s="sec-flux"><i>1</i>Votre situation</button><button type="button" data-s="sec-mp"><i>2</i>Votre tarif</button><button type="button" data-s="sec-cad"><i>3</i>Votre cadencier</button><button type="button" data-s="sec-couts"><i>4</i>Pour affiner</button></nav>
   <div class="sim"><div>
     <section class="panel" id="sec-flux"><h2>Votre situation</h2>
-      <div class="presets"><span>Partir d’un exemple</span>${Object.entries(PRESETS).map(([k,p])=>`<button type="button" data-preset="${k}">${p.label} · ${nf.format(p.volume)}</button>`).join('')}</div>
+      
       <div class="cards">
       <div class="card span2"><div class="ch"><span class="bd">${ic('boxes',18)}</span><div><h3>Palettes EUR livrées chez Carrefour</h3><p>Par an, tous entrepôts confondus</p></div></div>
         <div class="inp"><input id="in-volume" data-k="volume" type="number" min="1000" step="1000" inputmode="numeric" aria-label="Palettes livrées par an"><span>palettes / an</span></div>
@@ -200,9 +200,9 @@ function viewSim(){
         <div class="inp" id="w-gestion"><input data-k="gestion" type="number" min="0" step="0.05" inputmode="decimal" placeholder="à renseigner" aria-label="Coût de gestion palettes par palette"><span>€ HT / palette</span></div>
         <p class="hint">Montant annuel de cette ligne ÷ palettes livrées.<span class="fine" style="display:block;margin-top:6px">À titre informatif : nous constatons généralement une fourchette de 1 € à 2 € par palette.</span></p><span class="chip" id="c-gestion"></span></div>
       <div class="cards two" style="grid-column:1/-1">
-        <div class="card hasw"><button type="button" class="why" data-why="temps" aria-expanded="false" aria-label="Comment on estime le temps de suivi">?</button><div class="ch"><span class="bd">${ic('clock',18)}</span><div><h3>Temps passé à suivre les soldes et à relancer</h3><p>Rapprochements, e-mails et appels aux transporteurs, bons à récupérer</p></div></div>
+        <div class="card hasw"><button type="button" class="why" data-why="temps" aria-expanded="false" aria-label="Comment on estime le temps de suivi">?</button><div class="ch"><span class="bd">${ic('clock',18)}</span><div><h3>Temps passé à suivre les soldes et à relancer</h3><p>Rapprochement des soldes avec les transporteurs, désaccords, e-mails et appels, facturation des dettes non soldées</p></div></div>
           <div class="inp"><input data-k="heures" type="number" min="0" step="1" inputmode="numeric" aria-label="Heures par mois"><span>heures / mois</span></div><p class="why-p" id="why-temps" hidden></p><span class="chip" id="c-temps"></span></div>
-        <div class="card hasw"><button type="button" class="why" data-why="stock" aria-expanded="false" aria-label="Comment on estime le stock immobilisé">?</button><div class="ch"><span class="bd">${ic('hourglass',18)}</span><div><h3>Stock de palettes immobilisé en avance</h3><p>Vos transporteurs doivent cumuler 495 palettes par entrepôt avant de vous les rendre : vous gardez un stock tampon</p></div></div>
+        <div class="card hasw"><button type="button" class="why" data-why="stock" aria-expanded="false" aria-label="Comment on estime le stock immobilisé">?</button><div class="ch"><span class="bd">${ic('hourglass',18)}</span><div><h3>Stock de palettes immobilisé en attendant les retours</h3><p>Un entrepôt ne rend les palettes à un transporteur qu’à partir de 495 dues : en attendant, vous gardez du stock en plus pour continuer à expédier</p></div></div>
           <div class="row2"><div class="inp" id="w-stock"><input data-k="stock" type="number" min="0" step="50" inputmode="numeric" aria-label="Palettes immobilisées"><span>palettes</span></div><button class="btn ghost sm" type="button" id="b-est">Estimer pour moi</button></div><p class="why-p" id="why-stock" hidden></p><p class="why-p" id="est-note" hidden></p><span class="chip" id="c-stock"></span></div>
       </div>
     </div></section>
@@ -242,8 +242,9 @@ function viewSim(){
     </div>
     <details class="adv inner" id="adv"><summary>${ic('chev',14)}<span>Hypothèses avancées</span></summary><div class="g3">
       <label>Valeur d’une palette EUR (€)<div class="inp"><input data-k="valPal" type="number" min="0" step="0.5" inputmode="decimal"></div></label>
-      <label>Coût horaire chargé (€)<div class="inp"><input data-k="tauxHoraire" type="number" min="0" step="1" inputmode="decimal"></div></label>
-      <label>Coût du capital (% / an)<div class="inp"><input data-k="taux" type="number" min="0" max="100" step="0.5" inputmode="decimal"></div></label></div></details></details></section>
+      <label>Coût horaire complet (€)<div class="inp"><input data-k="tauxHoraire" type="number" min="0" step="1" inputmode="decimal"></div></label>
+      <label>Coût du capital (% / an)<div class="inp"><input data-k="taux" type="number" min="0" max="100" step="0.5" inputmode="decimal"></div></label>
+      <label>Frais de stockage : personnel, locaux, assurance (% / an)<div class="inp"><input data-k="fraisStock" type="number" min="0" max="100" step="0.5" inputmode="decimal"></div></label></div></details></details></section>
   </div>
   <aside class="sim-out"><div class="res" id="res">
     <div class="res-hero"><span class="k"><i class="ex" id="ex-chip">À compléter</i><span id="hero-k">Seuil de rentabilité</span></span><strong id="r-net">–</strong><span class="sub" id="r-sub"></span>
@@ -306,8 +307,8 @@ function syncInputs(){
 function syncVolume(){$('#rg-volume').value=clamp(100*Math.log10(Math.max(1000,S.volume)/1000)/3,0,100);updHint()}
 function updHint(){$('#h-volume').textContent=`Soit ${nf.format(Math.floor(S.volume/CFG.seuil))} complets de ${CFG.seuil} palettes par an.`}
 function whyHtml(k){
-  if(k==='temps')return `Coût = heures par mois × 12 × coût horaire chargé (${eur(+S.tauxHoraire||0)} par heure). Le coût horaire se modifie dans « Pour affiner », rubrique Hypothèses avancées.`;
-  return `Coût = palettes immobilisées × valeur d’une palette EUR (${eur(+S.valPal||0)}) × coût du capital (${S.taux} % par an). « Estimer pour moi » suppose que chaque couple transporteur × entrepôt cumule en moyenne ${CFG.pallPerPair} palettes avant de vous les rendre, dans la limite de 15 % de votre volume annuel.`;
+  if(k==='temps')return `Coût = heures par mois × 12 × coût horaire complet (${eur(+S.tauxHoraire||0)} par heure).<br><br><b>Pourquoi 30 € par défaut ?</b> Pour un employé avec quelques années d’ancienneté (1,2 à 1,4 Smic, soit 2 240 à 2 610 € bruts par mois), le coût employeur est de 21 à 26 € par heure travaillée : charges patronales de 25 à 35 %, 1 607 heures par an. On y ajoute environ 20 % de frais indirects (poste de travail, encadrement, formation), d’où 30 €. À titre de comparaison, le coût horaire moyen tous métiers confondus est de 44,7 € (Insee, 2025).<br><br>Le coût horaire se modifie dans « Pour affiner », rubrique Hypothèses avancées.<br>Sources : <a href="https://www.insee.fr/fr/statistiques/8733109" target="_blank" rel="noopener noreferrer">Insee, coût du travail</a> ; <a href="https://www.info.gouv.fr/public/index.php/actualite/le-smic-revalorise-le-1er-juin-2026" target="_blank" rel="noopener noreferrer">Smic au 1er juin 2026</a> ; <a href="https://payfit.com/fr/fiches-pratiques/comment-calculer-le-cout-dun-salarie/" target="_blank" rel="noopener noreferrer">PayFit, coût d’un salarié</a>.`;
+  return `Des palettes qui attendent leur retour, c’est un stock en plus, qui coûte chaque année : du capital immobilisé (${S.taux} %) et des frais de stockage (${S.fraisStock} % : personnel, locaux, assurance), soit ${(+S.taux||0)+(+S.fraisStock||0)} % de sa valeur. Exemple : 10 000 € de palettes en attente coûtent ${eur(10000*((+S.taux||0)+(+S.fraisStock||0))/100)} par an.<br><br><b>Pourquoi ${CFG.pallPerPair} palettes ?</b> Pour un transporteur et un entrepôt Carrefour donnés, les palettes dues s’accumulent de 0 à 495, puis l’entrepôt les rend d’un coup et le compteur repart de 0. En moyenne, le compteur est à mi-chemin : environ ${CFG.pallPerPair} palettes en attente. Avec ${S.transporteurs} transporteurs et ${S.entrepots} entrepôts, cela fait ${S.transporteurs*S.entrepots} compteurs, soit ${nf.format(S.transporteurs*S.entrepots*CFG.pallPerPair)} palettes en attente en moyenne.<svg viewBox="0 0 360 78" width="100%" style="max-width:340px;display:block;margin:8px 0 4px" role="img" aria-label="Le compteur de palettes dues monte de 0 à 495 puis retombe à 0 : en moyenne, environ 247"><line x1="8" y1="66" x2="352" y2="66" stroke="currentColor" stroke-opacity=".25"/><polyline fill="none" stroke="var(--mint-deep)" stroke-width="2.5" stroke-linejoin="round" points="10,66 100,14 100,66 190,14 190,66 280,14"/><line x1="8" y1="40" x2="352" y2="40" stroke="currentColor" stroke-opacity=".6" stroke-dasharray="4 4"/><text x="12" y="10" font-size="10" fill="currentColor">495</text><text x="356" y="35" text-anchor="end" font-size="10" fill="currentColor">≈ ${CFG.pallPerPair} en moyenne</text><text x="12" y="77" font-size="10" fill="currentColor">0</text></svg>Calcul : palettes en attente × ${eur(+S.valPal||0)} × ${(+S.taux||0)+(+S.fraisStock||0)} % par an (15 % de votre volume au maximum).<br><br>Estimation prudente : on ne compte ni l’obsolescence ni les pertes, alors qu’un stock coûte souvent 20 à 30 % de sa valeur par an, tout compris.<br>Sources : <a href="https://www.pennylane.com/fr/fiches-pratiques/comptabilite/cout-de-stockage-ecommerce" target="_blank" rel="noopener noreferrer">Pennylane, coût de stockage</a> ; <a href="https://openclassrooms.com/courses/6059131-pilotez-la-supply-chain-dans-l-industrie-du-futur/6501506-suivez-les-couts-de-votre-supply-chain" target="_blank" rel="noopener noreferrer">OpenClassrooms, coûts de la supply chain</a>.`;
 }
 document.addEventListener('click',e=>{
   const w=e.target.closest&&e.target.closest('[data-why]');
@@ -317,10 +318,10 @@ document.addEventListener('click',e=>{
 function update(k){
   if(k==='transporteurs'||k==='entrepots'||k==='volume'){if(S.stockAuto)$('[data-k="stock"]').value=estStock(S)}
   const r=calc(S);saveLocal();updHero(r);updCad();
-  {const en=$('#est-note');if(en){en.hidden=!S.stockAuto;if(S.stockAuto)en.innerHTML=`Estimation : ${S.transporteurs} transporteurs × ${S.entrepots} entrepôts × ${CFG.pallPerPair} palettes, dans la limite de 15 % de votre volume. <button type="button" class="lnk" id="est-edit">Modifier</button>`}}
+  {const en=$('#est-note');if(en){en.hidden=!S.stockAuto;if(S.stockAuto)en.innerHTML=`Estimation : ${S.transporteurs} transporteurs × ${S.entrepots} entrepôts × ${CFG.pallPerPair} palettes en moyenne, dans la limite de 15 % de votre volume. <button type="button" class="lnk" id="est-edit">Modifier</button>`}}
   $('#c-gestion').textContent=r.hasG?`= ${eur(r.it.gestion)} par an`:'À renseigner';
   $('#c-temps').textContent=`= ${eur(r.it.temps)} par an`;
-  $('#c-stock').textContent=`= ${eur(r.it.stock)} par an de coût d’immobilisation`;
+  $('#c-stock').textContent=`= ${eur(r.it.stock)} par an de coût du stock immobilisé`;
   $('#c-urgence').textContent=`= ${eur(r.it.urgence)} par an`;
   $('#c-perdues').textContent=`= ${eur(r.it.perdues)} par an`;
   $('#mp-r-pu').textContent=eur2(r.mp.unit);$('#mp-r-tier').textContent=`Palier ${r.mp.tierLabel}, tarif fixé pour 12 mois.`;$('#mp-r-an').textContent=`${nf.format(r.V)} palettes × ${eur2(r.mp.unit)} = ${eur(r.mp.reloc)} par an`;
