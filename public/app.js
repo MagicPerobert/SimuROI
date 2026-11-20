@@ -258,13 +258,16 @@ function viewSim(){
   </div>
   <aside class="sim-out"><div class="res" id="res">
     <div class="res-hero"><span class="k"><i class="ex" id="ex-chip">À compléter</i><span id="hero-k">Seuil de rentabilité</span></span><strong id="r-net">–</strong><span class="sub" id="r-sub"></span>
-      <div class="chips"><span>Coût MagicPallet <b id="r-mpt">–</b></span></div>
+      <div class="tl" id="tl" hidden><div class="tl-h"><span id="tl-t">Économies cumulées</span><div class="tl-seg" role="group" aria-label="Horizon"><button type="button" data-h="12">1 an</button><button type="button" data-h="36" class="on">3 ans</button><button type="button" data-h="60">5 ans</button></div></div>
+        <svg id="tl-svg" viewBox="0 0 400 120" role="img" aria-label="Économies cumulées, mois après mois"></svg>
+        <div class="tl-k"><b id="tl-v">–</b><span id="tl-s"></span></div></div>
+      <div class="chips"><span><span id="r-mpl">Coût MagicPallet par an</span> <b id="r-mpt">–</b></span></div>
       <div class="prec"><div class="prec-t"><span id="prec-l"></span><b id="prec-p"></b></div><div class="prec-b"><i id="prec-i"></i></div><button class="next" id="next-step" type="button"></button></div></div>
     <div class="res-body">
       <div class="acts"><button class="btn primary" id="b-contact">${ic('phone',16)}<span>En discuter ensemble</span></button><p class="fine c">Ou <a id="book-link" href="${CONTACT.book}" target="_blank" rel="noopener noreferrer">réservez directement un créneau</a></p></div>
       <div class="msg" id="r-msg"></div>
       <div><h4>Où vous vous situez</h4><div class="gauge" id="gauge"><span class="mk thr" id="mk-thr"><b id="t-thr"></b></span><span class="mk you" id="mk-you"><b id="t-you"></b></span></div><div class="gauge-sc"><span>0,50 €</span><span>2,50 € par palette</span></div></div>
-      <div><h4>Repères</h4><table class="sens" id="sens"></table></div>
+      <p class="fine" id="sens" style="margin:-6px 0 2px"></p>
       <details class="adv slim" id="adv-cost"><summary>${ic('chev',14)}<span>Détail des coûts annuels</span></summary><div class="bars">
         <div><div class="bar-l"><span>Aujourd’hui</span><b id="bt-t"></b></div><div class="bar" id="bar-t"></div></div>
         <div><div class="bar-l"><span>Avec MagicPallet</span><b id="bt-m"></b></div><div class="bar" id="bar-m"></div></div>
@@ -319,6 +322,25 @@ function syncInputs(){
 }
 function syncVolume(){$('#rg-volume').value=clamp(100*Math.log10(Math.max(1000,S.volume)/1000)/3,0,100);updHint()}
 function updHint(){$('#h-volume').textContent=`Soit ${nf.format(Math.floor(S.volume/CFG.seuil))} complets de ${CFG.seuil} palettes par an.`}
+let TLH=36,TLanim=true;
+function updTL(r,showEx,exNet){
+  const box=$('#tl');if(!box)return;
+  const net=r.hasG?r.net:(showEx?exNet:null);
+  if(net==null||!r.V){box.hidden=true;TLanim=true;$('#r-mpl').textContent='Coût MagicPallet par an';$('#r-mpt')._v=null;$('#r-mpt').textContent=eur(r.mp.total);return}
+  box.hidden=false;
+  $('#tl-t').textContent=r.hasG?'Économies cumulées':'Exemple · économies cumulées';
+  $$('#tl [data-h]').forEach(b=>b.classList.toggle('on',+b.dataset.h===TLH));
+  const H=TLH,W=400,HT=120,top=14,bot=24,pad=6,pos=net>=0,span=HT-top-bot,y0=pos?HT-bot:top,per=net/12,maxA=Math.max(Math.abs(per*H),1),bw=(W-2*pad)/H;
+  let bars='';
+  for(let m=1;m<=H;m++){const h=Math.max(1.5,Math.abs(per*m)/maxA*span),x=pad+(m-1)*bw;
+    bars+=`<rect class="tl-bar${TLanim?' anim':''}${pos?'':' neg'}" x="${x.toFixed(2)}" y="${(pos?y0-h:y0).toFixed(2)}" width="${Math.max(1,bw-1.2).toFixed(2)}" height="${h.toFixed(2)}" rx="1.5" style="animation-delay:${Math.min(m*7,420)}ms"/>`}
+  let marks='';
+  for(let y=1;y<=H/12;y++){const x=pad+y*12*bw-bw/2;marks+=`<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${top}" y2="${HT-bot+4}" stroke="rgba(255,255,255,.18)" stroke-dasharray="2 3"/><text x="${x.toFixed(1)}" y="${HT-6}" text-anchor="middle" font-size="10" fill="#B5BBF2">An ${y}</text>`}
+  $('#tl-svg').innerHTML=`<defs><linearGradient id="tlg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#1FB99A"/><stop offset="1" stop-color="#3CDAB9"/></linearGradient></defs><line x1="${pad}" x2="${W-pad}" y1="${y0}" y2="${y0}" stroke="rgba(255,255,255,.35)"/>${marks}${bars}`;
+  TLanim=false;
+  tween($('#tl-v'),per*H,v=>sgnR(v));$('#r-mpl').textContent='Coût MagicPallet sur '+(H/12)+' an'+(H>12?'s':'');tween($('#r-mpt'),r.mp.total/12*H,v=>eur(v));$('#tl-v').classList.toggle('neg',net<0);$('#tl-s').textContent=`sur ${H/12} an${H>12?'s':''}`;
+}
+document.addEventListener('click',e=>{const h=e.target.closest&&e.target.closest('#tl [data-h]');if(h){TLH=+h.dataset.h;TLanim=true;Tr.log('advanced_open',{what:'horizon:'+TLH});update()}});
 function whyHtml(k){
   if(k==='temps')return `Coût = heures par mois × 12 × coût horaire complet (${eur(+S.tauxHoraire||0)} par heure).<br><br><b>Pourquoi 30 € par défaut ?</b> Pour un employé avec quelques années d’ancienneté (1,2 à 1,4 Smic, soit 2 240 à 2 610 € bruts par mois), le coût employeur est de 21 à 26 € par heure travaillée : charges patronales de 25 à 35 %, 1 607 heures par an. On y ajoute environ 20 % de frais indirects (poste de travail, encadrement, formation), d’où 30 €. À titre de comparaison, le coût horaire moyen tous métiers confondus est de 44,7 € (Insee, 2025).<br><br>Le coût horaire se modifie dans « Pour affiner », rubrique Hypothèses avancées.<br>Sources : <a href="https://www.insee.fr/fr/statistiques/8733109" target="_blank" rel="noopener noreferrer">Insee, coût du travail</a> ; <a href="https://www.info.gouv.fr/public/index.php/actualite/le-smic-revalorise-le-1er-juin-2026" target="_blank" rel="noopener noreferrer">Smic au 1er juin 2026</a> ; <a href="https://payfit.com/fr/fiches-pratiques/comment-calculer-le-cout-dun-salarie/" target="_blank" rel="noopener noreferrer">PayFit, coût d’un salarié</a>.`;
   return `Des palettes qui attendent leur retour, c’est un stock en plus, qui coûte chaque année : du capital immobilisé (${S.taux} %) et des frais de stockage (${S.fraisStock} % : personnel, locaux, assurance), soit ${(+S.taux||0)+(+S.fraisStock||0)} % de sa valeur. Exemple : 10 000 € de palettes en attente coûtent ${eur(10000*((+S.taux||0)+(+S.fraisStock||0))/100)} par an.<br><br><b>Pourquoi ${CFG.pallPerPair} palettes ?</b> Pour un transporteur et un entrepôt Carrefour donnés, les palettes dues s’accumulent de 0 à 495, puis l’entrepôt les rend d’un coup et le compteur repart de 0. En moyenne, le compteur est à mi-chemin : environ ${CFG.pallPerPair} palettes en attente. Avec ${S.transporteurs} transporteurs et ${S.entrepots} entrepôts, cela fait ${S.transporteurs*S.entrepots} compteurs, soit ${nf.format(S.transporteurs*S.entrepots*CFG.pallPerPair)} palettes en attente en moyenne.<svg viewBox="0 0 360 78" width="100%" style="max-width:340px;display:block;margin:8px 0 4px" role="img" aria-label="Le compteur de palettes dues monte de 0 à 495 puis retombe à 0 : en moyenne, environ 247"><line x1="8" y1="66" x2="352" y2="66" stroke="currentColor" stroke-opacity=".25"/><polyline fill="none" stroke="var(--mint-deep)" stroke-width="2.5" stroke-linejoin="round" points="10,66 100,14 100,66 190,14 190,66 280,14"/><line x1="8" y1="40" x2="352" y2="40" stroke="currentColor" stroke-opacity=".6" stroke-dasharray="4 4"/><text x="12" y="10" font-size="10" fill="currentColor">495</text><text x="356" y="35" text-anchor="end" font-size="10" fill="currentColor">≈ ${CFG.pallPerPair} en moyenne</text><text x="12" y="77" font-size="10" fill="currentColor">0</text></svg>Calcul : palettes en attente × ${eur(+S.valPal||0)} × ${(+S.taux||0)+(+S.fraisStock||0)} % par an (15 % de votre volume au maximum).<br><br>Estimation prudente : on ne compte ni l’obsolescence ni les pertes, alors qu’un stock coûte souvent 20 à 30 % de sa valeur par an, tout compris.<br>Sources : <a href="https://www.pennylane.com/fr/fiches-pratiques/comptabilite/cout-de-stockage-ecommerce" target="_blank" rel="noopener noreferrer">Pennylane, coût de stockage</a> ; <a href="https://openclassrooms.com/courses/6059131-pilotez-la-supply-chain-dans-l-industrie-du-futur/6501506-suivez-les-couts-de-votre-supply-chain" target="_blank" rel="noopener noreferrer">OpenClassrooms, coûts de la supply chain</a>.`;
@@ -342,7 +364,7 @@ function update(k){
   $('#mp-c-m').textContent=eur(r.mp.conM);$('#mp-c-sub').textContent=`Nous consolidons vos soldes sur tous les entrepôts Carrefour et vous avançons les palettes : livré dès 495 palettes, sans attendre qu’un entrepôt ou un transporteur ait cumulé son complet.`;
   $('#mp-s-m').textContent=eur(r.mp.logM+r.mp.conM);$('#mp-s-an').textContent=`${eur(r.mp.logM+r.mp.conM)} × 12 = ${eur(r.mp.logiciel+r.mp.conso)} par an`;
   tween($('#mp-t'),r.mp.total,v=>eur(v)+' par an');$('#mp-t-sub').textContent=r.V?`soit ${eur2(r.mp.total/r.V)} par palette.`:'';
-  $('#r-mpt').textContent=eur(r.mp.total);
+  
   $$('#stair .st').forEach((el,k)=>{el.classList.toggle('lo',k<r.mp.ti);el.classList.toggle('cur',k===r.mp.ti);el.classList.toggle('nx',k===r.mp.ti+1)});
   $('#stair-c').textContent=`${eur2(r.mp.unit)} par palette`;
   const nx=r.mp.next;$('#nudge').innerHTML=ic('arrow',14)+'<span>'+(!nx?`Vous êtes au meilleur tarif : ${eur2(r.mp.unit)} par palette.`:nx.reloc<r.mp.reloc?`À <b>${nf.format(nx.vol)} palettes</b> (+${nf.format(nx.dv)}), le tarif passe à ${eur2(nx.price)} : votre relocalisation coûterait <b>${eur(r.mp.reloc-nx.reloc)} de moins</b>.`:`À partir de <b>${nf.format(nx.vol)} palettes</b>, le tarif passe à ${eur2(nx.price)} par palette.`)+'</span>';
@@ -367,6 +389,7 @@ function update(k){
     $('#r-sub').textContent='Vous gagnez dès que vos transporteurs vous facturent plus que cela, avant même vos autres postes.';
     msg.classList.remove('neg');msg.innerHTML='Le seul chiffre qui manque est le vôtre : <b>ce que vos transporteurs vous facturent aujourd’hui par palette</b> pour la gestion et le retour des palettes EUR. Il figure sur vos factures de transport.';
   }
+  updTL(r,showEx,exNet);
   const lo=0.5,hi=2.5,pc=x=>clamp((x-lo)/(hi-lo),0,1)*100;
   $('#gauge').style.setProperty('--sp',pc(r.seuil)+'%');$('#mk-thr').style.left=pc(r.seuil)+'%';const you=$('#mk-you');you.style.display=(r.hasG||showEx)?'':'none';you.classList.toggle('ex',!r.hasG&&showEx);if(r.hasG)you.style.left=pc(r.g)+'%';else if(showEx)you.style.left=pc(exg)+'%';
   $('#t-thr').textContent=r.seuil<=lo?`Seuil < ${eur2(lo)}`:r.seuil>=hi?`Seuil > ${eur2(hi)}`:`Seuil ${eur2(r.seuil)}`;$('#t-you').textContent=r.hasG?`Vous : ${eur2(r.g)}`:`Exemple : ${eur2(exg||0)}`;
@@ -378,7 +401,7 @@ function update(k){
   const row=(c,n,v)=>`<span class="n" style="--c:${c}">${n}</span><span class="v">${typeof v==='string'?v:eur(v)}</span>`;
   $('#lg').innerHTML=[row('var(--s1)','Gestion palettes',r.hasG?r.it.gestion:'à renseigner'),row('var(--s2)','Temps de suivi',r.it.temps),row('var(--s3)','Stock immobilisé',r.it.stock),row('var(--s4)','Achats d’urgence',r.it.urgence),row('var(--s5)','Palettes non récupérées',r.it.perdues),
     row('var(--mint)',`Relocalisation (${eur2(r.mp.unit)} / palette)`,r.mp.reloc),row('var(--mint)','Abonnement : usage de la plateforme',r.mp.logiciel),row('var(--mint)','Abonnement : consolidation et avance',r.mp.conso)].join('');
-  $('#sens').innerHTML=`<tr><td>Chaque 10 centimes de plus par palette</td><td class="pos">${r.V?sgnR(r.V*0.1):'–'} par an</td></tr>`;
+  $('#sens').textContent=r.V?`Chaque 10 centimes de plus facturés par vos transporteurs ajoutent ${eur(r100(r.V*0.1))} à votre gain par an.`:'';
   if(userTouched&&r.hasG){clearTimeout(simTimer);simTimer=setTimeout(()=>{const c=calc(S);
     Tr.log('simulation',{inputs:Object.assign({},S,{stock:c.stock}),net:Math.round(c.net),total:Math.round(c.total),mpTotal:Math.round(c.mp.total),seuil:+c.seuil.toFixed(2)});userTouched=false},1800)}
 }
@@ -433,26 +456,31 @@ function openContact(ctx,from){
   const lbl=demo?'Démonstration de la plateforme MagicPallet':sim?'En discuter ensemble':'Parler à un expert';
   const sub=demo?'Un expert MagicPallet vous présente notre plateforme de gestion des supports de manutention, sur vos propres cas d’usage, sans engagement.':sim?'Un expert MagicPallet passe vos chiffres en revue avec vous, sans engagement.':'Un expert MagicPallet répond à vos questions sur le process Carrefour et sur la plateforme, sans engagement.';
   Tr.log('contact_open',{ctx,from});
-  let mode='call',slot='Peu importe';const today=new Date().toISOString().slice(0,10);
+  let mode='call';
   openModal(`<button class="x" style="all:unset;cursor:pointer;position:absolute;top:16px;right:16px;padding:8px;color:var(--muted)" id="mx" aria-label="Fermer">${ic('x',18)}</button><h2>${esc(lbl)}</h2><p>${esc(sub)}</p>
   <form id="f-c" style="display:flex;flex-direction:column;gap:14px">
     <div class="seg full" id="c-mode" role="group" aria-label="Votre demande"><button type="button" data-mode="call" class="on">${ic('phone',14)}<span>Être rappelé(e)</span></button><button type="button" data-mode="rdv">${ic('clock',14)}<span>Prendre rendez-vous</span></button></div>
-    <div id="rdv-f" hidden><div class="g2"><label>Jour souhaité<div class="inp"><input name="date" type="date" min="${today}"></div></label><div><span class="lab">Créneau</span><div class="seg full" id="c-slot" role="group" aria-label="Créneau souhaité">${['Matin','Après-midi','Peu importe'].map((x,i)=>`<button type="button" data-slot="${x}" class="${i===2?'on':''}">${x}</button>`).join('')}</div></div></div></div>
-    <div class="g2"><label>Téléphone<div class="inp"><input name="tel" type="tel" autocomplete="tel"></div></label><label>E-mail<div class="inp"><input name="email" type="email" value="${esc(PROFILE&&PROFILE.email||'')}" autocomplete="email"></div></label></div>
-    <label>Un point à préparer ? (facultatif)<textarea name="msg"></textarea></label>
-    <button class="btn primary" type="submit" id="c-go"></button>
+    <div id="call-f" style="display:flex;flex-direction:column;gap:14px">
+      <div class="g2"><label>Téléphone<div class="inp"><input name="tel" type="tel" autocomplete="tel"></div></label><label>E-mail<div class="inp"><input name="email" type="email" value="${esc(PROFILE&&PROFILE.email||'')}" autocomplete="email"></div></label></div>
+      <label>Un point à préparer ? (facultatif)<textarea name="msg"></textarea></label>
+      <button class="btn primary" type="submit" id="c-go">${ic('phone',16)}<span>Être rappelé(e)</span></button>
+    </div>
+    <div id="rdv-b" style="display:none;flex-direction:column;gap:14px">
+      <p class="hint" style="margin:0">Choisissez le créneau qui vous convient directement dans l’agenda : la réservation est immédiate, sans échange supplémentaire.</p>
+      <a class="btn primary" id="rdv-go" href="${CONTACT.book}" target="_blank" rel="noopener noreferrer">${ic('clock',16)}<span>Choisir un créneau</span></a>
+    </div>
     <p class="legal">Vous préférez écrire ? ${CONTACT.mail} · ${CONTACT.tel}</p></form>`);
   $('#mx').addEventListener('click',closeModal);
-  const upd=()=>{$('#rdv-f').hidden=mode!=='rdv';$$('#c-mode [data-mode]').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));$$('#c-slot [data-slot]').forEach(b=>b.classList.toggle('on',b.dataset.slot===slot));
-    $('#c-go').innerHTML=ic(mode==='rdv'?'clock':'phone',16)+'<span>'+(mode==='rdv'?'Demander ce rendez-vous':'Être rappelé(e)')+'</span>'};
+  const upd=()=>{$$('#c-mode [data-mode]').forEach(b=>b.classList.toggle('on',b.dataset.mode===mode));$('#call-f').style.display=mode==='call'?'flex':'none';$('#rdv-b').style.display=mode==='rdv'?'flex':'none'};
   $$('#c-mode [data-mode]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.mode;upd()}));
-  $$('#c-slot [data-slot]').forEach(b=>b.addEventListener('click',()=>{slot=b.dataset.slot;upd()}));
+  $('#rdv-go').addEventListener('click',()=>{Tr.log('contact_open',{ctx:'booking',from:ctx});Tr.flush();setTimeout(closeModal,150)});
   upd();
   $('#f-c').addEventListener('submit',e=>{e.preventDefault();const f=new FormData(e.target),tel=(f.get('tel')||'').trim(),email=(f.get('email')||'').trim();
     if(!tel&&!email){toast('Indiquez un téléphone ou un e-mail');return}
-    Tr.log('contact_request',{ctx,from,mode,date:mode==='rdv'?(f.get('date')||''):'',slot:mode==='rdv'?slot:'',tel,email,msg:(f.get('msg')||'').trim().slice(0,400)});Tr.flush();closeModal();
-    toast(mode==='rdv'?'Demande de rendez-vous envoyée, nous revenons vers vous pour confirmer':'Demande envoyée, nous revenons vers vous')});
+    Tr.log('contact_request',{ctx,from,mode:'call',tel,email,msg:(f.get('msg')||'').trim().slice(0,400)});Tr.flush();closeModal();
+    toast('Demande envoyée, nous revenons vers vous')});
 }
+
 let tt=null;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
 $('#scrim').addEventListener('click',()=>{if(WELCOME_PENDING)return;closeDrawer();closeModal()});
 $('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
@@ -475,7 +503,7 @@ const EVT=e=>{const f=k=>FIELDS[k]?FIELDS[k][0]:k,fv=(k,v)=>FIELDS[k]?FIELDS[k][
   case'input_change':return`Modifie « ${esc(f(e.k))} » : ${e.from==null?'–':esc(fv(e.k,e.from))} → <b>${esc(fv(e.k,e.to))}</b>`;
   case'simulation':return`Simulation : gain net <b>${sgn(e.net)}</b> par an, seuil ${eur2(e.seuil)}`;
   case'stock_estimate':return'Utilise l’estimation du stock immobilisé';
-  case'advanced_open':return e.what==='volume'?'Ouvre « Et si mon volume varie ? »':e.what==='incl'?'Consulte « Ce que comprend votre abonnement »':e.what==='stair'?'Consulte « Paliers de tarif »':(e.what||'').startsWith('why')?'Consulte « Comment on estime ? » ('+esc(e.what.slice(4))+')':'Ouvre les hypothèses avancées';
+  case'advanced_open':return e.what==='volume'?'Ouvre « Et si mon volume varie ? »':e.what==='incl'?'Consulte « Ce que comprend votre abonnement »':e.what==='stair'?'Consulte « Paliers de tarif »':(e.what||'').startsWith('horizon')?'Choisit l’horizon des économies ('+esc(e.what.slice(8))+' mois)':(e.what||'').startsWith('why')?'Consulte « Comment on estime ? » ('+esc(e.what.slice(4))+')':'Ouvre les hypothèses avancées';
   case'locked_click':return`Clique sur le menu verrouillé « ${esc(MODS[e.module]?MODS[e.module].n:e.module)} »`;
   case'teaser_cta':return`Demande une démo de la plateforme, depuis « ${esc(MODS[e.module]?MODS[e.module].n:e.module)} »`;
   case'export':return'Enregistre sa simulation (CSV)';

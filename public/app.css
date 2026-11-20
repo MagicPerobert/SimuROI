@@ -202,6 +202,15 @@ details.adv.slim{margin-top:0;padding:2px 14px;border-radius:12px}
 .why-p a{color:var(--mint-deep);font-weight:700;text-decoration:underline}
 #adv-incl,#adv-stair,#adv-vol{margin-top:10px}.incl{margin:0;padding:0 0 12px 18px;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.45;color:var(--muted)}.incl b{color:var(--ink)}
 .fine a{color:var(--mint-deep);font-weight:700;text-decoration:underline}
+.tl{margin-top:14px}.tl[hidden]{display:none}
+.tl-h{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 10px;font-size:12.5px;color:#D7DAFB}
+.tl-seg{display:inline-flex;background:rgba(255,255,255,.1);border-radius:999px;padding:2px}
+.tl-seg button{all:unset;cursor:pointer;white-space:nowrap;padding:3px 11px;border-radius:999px;font:700 12px 'DM Sans',system-ui,sans-serif;color:#D7DAFB;transition:background .15s,color .15s}.tl-seg button.on{background:var(--mint);color:#02075D}.tl-seg button:focus-visible{outline:2px solid var(--mint)}
+.tl svg{display:block;width:100%;height:auto;margin-top:6px}.tl-bar{fill:url(#tlg)}.tl-bar.neg{fill:#FF8A9B}
+.tl-bar.anim{transform-box:fill-box;transform-origin:bottom;animation:tlg .55s cubic-bezier(.2,.7,.2,1) both}.tl-bar.anim.neg{transform-origin:top}
+@keyframes tlg{from{transform:scaleY(0)}}
+@media (prefers-reduced-motion:reduce){.tl-bar.anim{animation:none}}
+.tl-k{display:flex;align-items:baseline;gap:8px;margin-top:2px}.tl-k b{font:800 24px/1.1 'Plus Jakarta Sans','DM Sans',system-ui,sans-serif;color:var(--mint);font-variant-numeric:tabular-nums;letter-spacing:-.02em}.tl-k span{font-size:12.5px;color:#B5BBF2}.tl-k b.neg{color:#FF8A9B}
 .row2{flex-wrap:wrap}.row2 .inp{flex:1 1 150px;min-width:150px}
 .why-p{margin:0;font-size:13px;line-height:1.45;color:var(--muted);background:var(--panel);border-radius:10px;padding:10px 12px}.why-p[hidden]{display:none}
 .lnk{all:unset;cursor:pointer;color:var(--mint-deep);font-weight:700;text-decoration:underline}.lnk:focus-visible{outline:3px solid var(--mint);border-radius:4px}
