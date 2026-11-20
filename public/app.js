@@ -11,7 +11,7 @@ const r100=n=>Math.round(n/100)*100,sgnR=n=>sgn(r100(n));
 const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 function tween(el,to,fmt){if(!el)return;const from=el._v==null?to:el._v;el._v=to;cancelAnimationFrame(el._r);if(reduceMotion||from===to){el.textContent=fmt(to);return}const t0=performance.now(),d=380;const step=t=>{const k=Math.min(1,(t-t0)/d),e=1-Math.pow(1-k,3);el.textContent=fmt(from+(to-from)*e);if(k<1)el._r=requestAnimationFrame(step);else el.textContent=fmt(to)};el._r=requestAnimationFrame(step)}
-const CONTACT={mail:'perobert@magicpallet.com',tel:'06 62 40 43 40'};
+const CONTACT={mail:'perobert@magicpallet.com',tel:'06 62 40 43 40',book:'https://bookings.cloud.microsoft/bookwithme/user/bfd3769a3c684a7eb2f10381f6529de4%40magicpallet.com?anonymous&ismsaljsauthenabled'};
 
 /* ---------- Grille indicative (à valider) ---------- */
 const CF_IMG='/carrefour.png';
@@ -147,14 +147,21 @@ const KEYS=['volume','sites','gestion','heures','stock','urgence','perdues','tra
 const touched=new Set();
 function initTouched(){touched.clear();for(const k of KEYS){if(k==='gestion'){if(S.gestion>0)touched.add(k)}else if(S[k]!==DEF[k])touched.add(k)}if(S.stockAuto)touched.add('stock')}
 function markTouched(k){if(k==='gestion'){S.gestion>0?touched.add(k):touched.delete(k)}else if(KEYS.includes(k))touched.add(k)}
+const FILL=['volume','sites','gestion','heures','stock','urgence','perdues'];
+function filled(k){
+  if(k==='gestion')return S.gestion>0;
+  if(k==='volume'||k==='sites')return touched.has(k);
+  const el=document.querySelector('[data-k="'+k+'"]'),has=!!el&&el.value!=='';
+  return k==='stock'?(!!S.stockAuto||(touched.has('stock')&&has)):(touched.has(k)&&has);
+}
 function nextStep(){
   if(!touched.has('volume'))return{t:'Entrez votre volume annuel',sel:'#in-volume'};
   if(!(S.gestion>0))return{t:'Ajoutez ce que vos transporteurs vous facturent par palette',sel:'[data-k="gestion"]'};
-  if(!touched.has('heures'))return{t:'Indiquez le temps passé à relancer',sel:'[data-k="heures"]'};
-  if(!touched.has('stock'))return{t:'Estimez votre stock immobilisé',sel:'#b-est'};
-  if(!touched.has('urgence'))return{t:'Avez-vous racheté des palettes en urgence ?',sel:'[data-k="urgence"]',open:true};
-  if(!touched.has('perdues'))return{t:'Quelle part des palettes ne revient jamais ?',sel:'[data-k="perdues"]',open:true};
-  return{t:'Votre estimation est complète : faites-la valider',cta:true};
+  if(!filled('heures'))return{t:'Indiquez le temps passé à relancer',sel:'[data-k="heures"]'};
+  if(!filled('stock'))return{t:'Estimez votre stock immobilisé',sel:'#b-est'};
+  if(!filled('urgence'))return{t:'Avez-vous racheté des palettes en urgence ?',sel:'[data-k="urgence"]',open:true};
+  if(!filled('perdues'))return{t:'Quelle part des palettes ne revient jamais ?',sel:'[data-k="perdues"]',open:true};
+  return{t:'Votre estimation est complète : discutons-en ensemble',cta:true};
 }
 function updCad(){
   const c=cadence(S),T=CFG.seuil;
@@ -171,7 +178,7 @@ function updCad(){
   $('#cad-tip').style.display=slow?'':'none';
 }
 function updHero(r){
-  const p=Math.min(100,25+Math.round(75*touched.size/KEYS.length)),n=nextStep();
+  const p=Math.min(100,25+Math.round(75*FILL.filter(filled).length/FILL.length)),n=nextStep();
   const ex=$('#ex-chip');ex.textContent=r.hasG?'Votre simulation':(CFG.exempleGestion&&r.V&&r.netAt(CFG.exempleGestion)>0?'Exemple illustratif':'À compléter');ex.classList.toggle('mine',!!r.hasG);
   $('#prec-l').textContent=p<45?'Estimation de départ':p<75?'Estimation affinée':'Estimation fiable';$('#prec-p').textContent=p+' %';$('#prec-i').style.width=p+'%';
   const b=$('#next-step');b.innerHTML=`<span>${esc(n.t)}</span>${ic('arrow',13)}`;b._n=n;
@@ -254,7 +261,7 @@ function viewSim(){
       <div class="chips"><span>Coût MagicPallet <b id="r-mpt">–</b></span></div>
       <div class="prec"><div class="prec-t"><span id="prec-l"></span><b id="prec-p"></b></div><div class="prec-b"><i id="prec-i"></i></div><button class="next" id="next-step" type="button"></button></div></div>
     <div class="res-body">
-      <div class="acts"><button class="btn primary" id="b-contact">${ic('phone',16)}<span>Recevoir mon étude chiffrée</span></button><p class="fine c">Sans engagement, sur vos propres chiffres.</p></div>
+      <div class="acts"><button class="btn primary" id="b-contact">${ic('phone',16)}<span>En discuter ensemble</span></button><p class="fine c">Ou <a id="book-link" href="${CONTACT.book}" target="_blank" rel="noopener noreferrer">réservez directement un créneau</a></p></div>
       <div class="msg" id="r-msg"></div>
       <div><h4>Où vous vous situez</h4><div class="gauge" id="gauge"><span class="mk thr" id="mk-thr"><b id="t-thr"></b></span><span class="mk you" id="mk-you"><b id="t-you"></b></span></div><div class="gauge-sc"><span>0,50 €</span><span>2,50 € par palette</span></div></div>
       <div><h4>Repères</h4><table class="sens" id="sens"></table></div>
@@ -303,6 +310,7 @@ function bindSim(){
   $('#next-step').addEventListener('click',()=>{const n=$('#next-step')._n;if(!n)return;if(n.cta){openContact('simulation');return}if(n.open&&!$('#refine').open)$('#refine').open=true;const el=$(n.sel);if(el){el.scrollIntoView({behavior:reduceMotion?'auto':'smooth',block:'center'});setTimeout(()=>el.focus({preventScroll:true}),380)}});
   $('#cad-more').addEventListener('click',()=>openTeaser('relocalisation'));
   $('#b-contact').addEventListener('click',()=>openContact('simulation'));
+  $('#book-link').addEventListener('click',()=>{Tr.log('contact_open',{ctx:'booking'});Tr.flush()});
   $('#b-export').addEventListener('click',exportCsv);
 }
 function syncInputs(){
@@ -422,8 +430,8 @@ function openWelcome(after,ctx){
 function openContact(ctx,from){
   if(!(PROFILE&&PROFILE.first)){openWelcome(()=>openContact(ctx,from),'contact');return}
   const demo=ctx==='demo',sim=ctx==='simulation';
-  const lbl=demo?'Démonstration de la plateforme MagicPallet':sim?'Recevoir mon étude chiffrée':'Parler à un expert';
-  const sub=demo?'Un expert MagicPallet vous présente notre plateforme de gestion des supports de manutention, sur vos propres cas d’usage, sans engagement.':sim?'Un expert MagicPallet passe vos chiffres en revue avec vous et prépare votre étude, sans engagement.':'Un expert MagicPallet répond à vos questions sur le process Carrefour et sur la plateforme, sans engagement.';
+  const lbl=demo?'Démonstration de la plateforme MagicPallet':sim?'En discuter ensemble':'Parler à un expert';
+  const sub=demo?'Un expert MagicPallet vous présente notre plateforme de gestion des supports de manutention, sur vos propres cas d’usage, sans engagement.':sim?'Un expert MagicPallet passe vos chiffres en revue avec vous, sans engagement.':'Un expert MagicPallet répond à vos questions sur le process Carrefour et sur la plateforme, sans engagement.';
   Tr.log('contact_open',{ctx,from});
   let mode='call',slot='Peu importe';const today=new Date().toISOString().slice(0,10);
   openModal(`<button class="x" style="all:unset;cursor:pointer;position:absolute;top:16px;right:16px;padding:8px;color:var(--muted)" id="mx" aria-label="Fermer">${ic('x',18)}</button><h2>${esc(lbl)}</h2><p>${esc(sub)}</p>
@@ -471,7 +479,7 @@ const EVT=e=>{const f=k=>FIELDS[k]?FIELDS[k][0]:k,fv=(k,v)=>FIELDS[k]?FIELDS[k][
   case'locked_click':return`Clique sur le menu verrouillé « ${esc(MODS[e.module]?MODS[e.module].n:e.module)} »`;
   case'teaser_cta':return`Demande une démo de la plateforme, depuis « ${esc(MODS[e.module]?MODS[e.module].n:e.module)} »`;
   case'export':return'Enregistre sa simulation (CSV)';
-  case'contact_open':return'Ouvre le formulaire de contact';
+  case'contact_open':return e.ctx==='booking'?'Clique sur « Réserver un créneau »':'Ouvre le formulaire de contact';
   case'contact_request':return`<b>${e.mode==='rdv'?'Demande un rendez-vous':'Demande à être contacté(e)'}</b>${e.mode==='rdv'&&(e.date||e.slot)?' · '+esc([e.date,e.slot].filter(Boolean).join(', ')):''}${e.tel?' · '+esc(e.tel):''}${e.msg?' · « '+esc(e.msg)+' »':''}`;
   default:return esc(e.type)}};
 const dt=t=>new Date(t).toLocaleString('fr-FR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
