@@ -24,6 +24,10 @@ Tout ce que fait un prospect est enregistré dans PostgreSQL : pages vues, param
 
 En ligne de commande : `railway init`, `railway add -d postgres`, `railway up`, puis les variables du point 4.
 
+## Identification des visiteurs
+
+À leur arrivée, les visiteurs non invités doivent renseigner **prénom, nom et société** (e-mail facultatif) avant d'accéder au simulateur. Leur activité est ensuite suivie dans `/admin`. Les prospects invités par lien personnel sont déjà connus et n'ont pas à le refaire.
+
 ## Se connecter et se déconnecter
 
 `/admin` demande l'identifiant et le mot de passe (`ADMIN_USER`, `ADMIN_PASSWORD`). Pour sortir : menu de compte en haut à droite → **Se déconnecter**. Si le navigateur garde la session (Safari, par exemple), fermez toutes ses fenêtres ou utilisez une fenêtre privée.

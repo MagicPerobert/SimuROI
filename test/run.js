@@ -27,6 +27,8 @@ try {
   { const me = await (await call('/api/me')).json(); assert.equal(me.profile, null); assert.equal(me.firstVisit, true); } ok('visiteur inconnu');
   assert.equal((await call('/api/track', { method: 'POST', body: '{}' })).status, 401); ok('track refusé sans visiteur');
   assert.equal((await call('/api/profile', { method: 'POST', body: JSON.stringify({ first: '', company: '' }) })).status, 400); ok('profil invalide refusé');
+  assert.equal((await call('/api/profile', { method: 'POST', body: JSON.stringify({ first: 'Camille', company: 'Laiterie du Val' }) })).status, 400); ok('nom de famille obligatoire');
+  assert.equal((await call('/api/profile', { method: 'POST', body: JSON.stringify({ first: 'C', last: 'D', company: 'X' }) })).status, 400); ok('saisies d’un seul caractère refusées');
   const pr = await call('/api/profile', { method: 'POST', body: JSON.stringify({ first: 'Camille', last: 'Durand', company: 'Laiterie du Val', email: 'c@val.example' }) });
   assert.equal(pr.status, 200); assert.ok(cookie.startsWith('mp_vid=')); ok('profil créé + cookie');
   assert.equal((await (await call('/api/me')).json()).profile.company, 'Laiterie du Val'); ok('profil relu');

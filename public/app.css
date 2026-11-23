@@ -60,7 +60,8 @@ h1,h2,h3,h4{font-family:'Plus Jakarta Sans','DM Sans',Arial,sans-serif;margin:0;
 .tb:hover{background:var(--panel)}
 .tb:focus-visible{outline:3px solid var(--mint)}
 .lang{font:700 14px 'DM Sans',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;color:var(--muted)}
-#view{padding:8px 40px 56px;max-width:1400px;width:100%}
+#view{padding:8px 40px 56px;max-width:1400px;width:100%;margin-inline:auto}
+@media (min-width:1800px){#view{max-width:1560px}}
 .hero-t h1{font-weight:800;font-size:clamp(26px,2.8vw,36px);line-height:1.08;letter-spacing:-.025em}
 .lead{color:var(--muted);font-size:17px;margin:8px 0 18px;max-width:64ch}
 /* simulator layout */
@@ -247,6 +248,7 @@ details.adv.slim{margin-top:0;padding:2px 14px;border-radius:12px}
 @keyframes gpop{40%{transform:scale(1.15)}}
 @media (prefers-reduced-motion:reduce){.gauge.idle .ghost,.card.kc.kc-empty::before,.gz-k b.blank,.gz-k b.pop{animation:none}}
 @media (max-width:560px){.card.kc{padding:20px 16px 16px}.card.kc .inp{height:68px}.card.kc .inp input{font-size:32px}.card.kc .inp input::placeholder{font-size:18px}.card.kc .inp span{font-size:13px}.card.kc .gz-k b{font-size:36px}}
+body.gated .main,body.gated #side{filter:blur(7px);pointer-events:none;user-select:none}
 .row2{flex-wrap:wrap}.row2 .inp{flex:1 1 150px;min-width:150px}
 .why-p{margin:0;font-size:13px;line-height:1.45;color:var(--muted);background:var(--panel);border-radius:10px;padding:10px 12px}.why-p[hidden]{display:none}
 .lnk{all:unset;cursor:pointer;color:var(--mint-deep);font-weight:700;text-decoration:underline}.lnk:focus-visible{outline:3px solid var(--mint);border-radius:4px}

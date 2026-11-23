@@ -483,19 +483,22 @@ function openTeaser(k){
   $('#td-demo').addEventListener('click',()=>{Tr.log('teaser_cta',{module:k});closeDrawer();openContact('demo',k)});
   $('#td-back').addEventListener('click',()=>{closeDrawer();go('simuler')});
 }
-function openModal(html){const own=html.includes('id="mx"');$('#modal').innerHTML=`<div class="mbox">${own?'':`<button class="x" type="button" id="mx" aria-label="Fermer" style="all:unset;cursor:pointer;position:absolute;top:16px;right:16px;padding:8px;color:var(--muted)">${ic('x',18)}</button>`}${html}</div>`;if(!own)$('#mx').addEventListener('click',closeModal);$('#modal').classList.add('on');$('#scrim').classList.add('on');const f=$('#modal input,#modal textarea');if(f)f.focus()}
+function openModal(html,locked){const own=locked||html.includes('id="mx"');$('#modal').innerHTML=`<div class="mbox">${own?'':`<button class="x" type="button" id="mx" aria-label="Fermer" style="all:unset;cursor:pointer;position:absolute;top:16px;right:16px;padding:8px;color:var(--muted)">${ic('x',18)}</button>`}${html}</div>`;if(!own)$('#mx').addEventListener('click',closeModal);$('#modal').classList.add('on');$('#scrim').classList.add('on');const f=$('#modal input,#modal textarea');if(f)f.focus()}
 function closeModal(){$('#modal').classList.remove('on');if(!$('#drawer').classList.contains('on'))$('#scrim').classList.remove('on')}
 async function saveProfile(body){const r=await fetch('/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),credentials:'same-origin'});if(!r.ok)throw 0;PROFILE=(await r.json()).profile;WELCOME_PENDING=false;Tr.hold=false;Tr.log('profile_set');Tr.flush()}
+let GATED=false;
+function gate(){GATED=true;document.body.classList.add('gated');['.main','#side'].forEach(s=>{const e=document.querySelector(s);if(e)e.inert=true});openWelcome(null,'gate')}
+function ungate(){GATED=false;document.body.classList.remove('gated');['.main','#side'].forEach(s=>{const e=document.querySelector(s);if(e)e.inert=false})}
 function openWelcome(after,ctx){
   const p=PROFILE||{};
-  const T={export:['Où enregistrer votre simulation ?','Dites-nous qui vous êtes : nous gardons votre simulation et préparons votre étude chiffrée.'],contact:['Où vous recontacter ?','Dites-nous qui vous êtes : un expert MagicPallet revient vers vous avec une étude sur vos propres chiffres.']}[ctx]||['Bienvenue dans votre espace découverte','Dites-nous qui vous êtes pour enregistrer votre simulation.'];
+  const T={gate:['Avant de commencer','Dites-nous qui vous êtes pour accéder au simulateur. Nous gardons votre simulation et préparons un échange sur vos propres chiffres.'],export:['Où enregistrer votre simulation ?','Dites-nous qui vous êtes : nous gardons votre simulation et préparons votre étude chiffrée.'],contact:['Où vous recontacter ?','Dites-nous qui vous êtes : un expert MagicPallet revient vers vous avec une étude sur vos propres chiffres.']}[ctx]||['Bienvenue dans votre espace découverte','Dites-nous qui vous êtes pour enregistrer votre simulation.'];
   openModal(`<h2>${esc(T[0])}</h2><p>${esc(T[1])}</p>
-  <form id="f-w" style="display:flex;flex-direction:column;gap:12px"><div class="g2"><label>Prénom<div class="inp"><input name="first" required autocomplete="given-name" value="${esc(p.first||'')}"></div></label><label>Nom<div class="inp"><input name="last" autocomplete="family-name" value="${esc(p.last||'')}"></div></label></div>
-  <label>Société<div class="inp"><input name="company" required autocomplete="organization" value="${esc(p.company||'')}"></div></label><label>E-mail professionnel<div class="inp"><input name="email" type="email" autocomplete="email" value="${esc(p.email||'')}"></div></label>
-  <button class="btn primary" type="submit">Continuer</button><p class="legal">MagicPallet conserve vos saisies et les pages consultées dans cet espace afin de préparer votre étude chiffrée. Vous pouvez demander leur suppression à ${CONTACT.mail}.</p></form>`);
+  <form id="f-w" style="display:flex;flex-direction:column;gap:12px"><div class="g2"><label>Prénom<div class="inp"><input name="first" required minlength="2" autocomplete="given-name" value="${esc(p.first||'')}"></div></label><label>Nom<div class="inp"><input name="last" required minlength="2" autocomplete="family-name" value="${esc(p.last||'')}"></div></label></div>
+  <label>Société<div class="inp"><input name="company" required minlength="2" autocomplete="organization" value="${esc(p.company||'')}"></div></label><label>E-mail professionnel<div class="inp"><input name="email" type="email" autocomplete="email" value="${esc(p.email||'')}"></div></label>
+  <button class="btn primary" type="submit">${ctx==='gate'?'Accéder au simulateur':'Continuer'}</button><p class="legal">MagicPallet conserve votre identité, vos saisies et les pages consultées dans cet espace afin de préparer votre étude chiffrée. Vous pouvez demander leur suppression à ${CONTACT.mail}.</p></form>`,ctx==='gate');
   $('#f-w').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);
     const body={first:(f.get('first')||'').trim(),last:(f.get('last')||'').trim(),company:(f.get('company')||'').trim(),email:(f.get('email')||'').trim()};
-    try{await saveProfile(body);closeModal();renderNav();if(after)after()}catch(err){toast('Enregistrement impossible, réessayez')}});
+    try{await saveProfile(body);ungate();closeModal();renderNav();if(after)after()}catch(err){toast('Enregistrement impossible, réessayez')}});
 }
 function openContact(ctx,from){
   if(!(PROFILE&&PROFILE.first)){openWelcome(()=>openContact(ctx,from),'contact');return}
@@ -529,9 +532,9 @@ function openContact(ctx,from){
 }
 
 let tt=null;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
-$('#scrim').addEventListener('click',()=>{if(WELCOME_PENDING)return;closeDrawer();closeModal()});
-$('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
-addEventListener('keydown',e=>{if(e.key==='Escape'&&!WELCOME_PENDING){closeDrawer();closeModal()}});
+$('#scrim').addEventListener('click',()=>{if(WELCOME_PENDING||GATED)return;closeDrawer();closeModal()});
+$('#modal').addEventListener('click',e=>{if(GATED)return;if(e.target.id==='modal')closeModal()});
+addEventListener('keydown',e=>{if(e.key==='Escape'&&!WELCOME_PENDING&&!GATED){closeDrawer();closeModal()}});
 $('#nav').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.go)go(b.dataset.go);else if(b.dataset.lock){closeSide();openTeaser(b.dataset.lock)}});
 $('#b-side-contact').addEventListener('click',()=>{closeSide();openContact('general')});
 $('#tb-talk').addEventListener('click',()=>openContact('general'));
@@ -618,7 +621,7 @@ async function boot(){
   let first=false;
   try{const j=await(await fetch('/api/me',{credentials:'same-origin'})).json();PROFILE=j.profile||null;first=!!j.firstVisit}catch(e){}
   window.ACCT_WAIT=false;renderNav();
-  if(PROFILE&&PROFILE.first&&PROFILE.company){if(first)showNotice();else Tr.flush()}
+  if(PROFILE&&PROFILE.first&&PROFILE.company){if(first)showNotice();else Tr.flush()}else gate();
 }
 render();
 boot();

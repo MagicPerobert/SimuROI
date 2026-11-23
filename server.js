@@ -133,7 +133,7 @@ app.get('/api/me', wrap(async (req, res) => {
 app.post('/api/profile', limiter(20), jsonBody, wrap(async (req, res) => {
   const b = req.body || {};
   const first = cut(b.first, 80), last = cut(b.last, 80), company = cut(b.company, 120), email = cut(b.email, 160);
-  if (!first || !company || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return res.status(400).json({ error: 'invalid' });
+  if (first.length < 2 || last.length < 2 || company.length < 2 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return res.status(400).json({ error: 'invalid' });
   let p = await visitorOf(req);
   if (p) {
     const { rows } = await pool.query(
