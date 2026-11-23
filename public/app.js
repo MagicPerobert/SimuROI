@@ -19,7 +19,7 @@ const CFG={
   reloc:[[5000,1.20],[10000,1.18],[20000,1.16],[35000,1.14],[55000,1.12],[75000,1.10],[150000,1.09],[225000,1.08],[300000,1.07],[400000,1.06],[500000,1.05],[Infinity,1.00]],
   logiciel:[[1,200],[3,400],[5,450],[10,500],[20,600],[35,700],[50,800],[75,900],[100,1100],[150,1400],[200,1800],[Infinity,2400]],
   conso:[[55000,200],[75000,220],[150000,300],[225000,550],[300000,800],[400000,1050],[500000,1350],[Infinity,1800]],
-  seuil:495,logoCarrefour:true,exempleGestion:1.5,pallPerPair:247
+  seuil:495,logoCarrefour:true,exempleGestion:1.5,kmEvites:443,kgCo2Km:1.06,pallPerPair:247
 };
 const tier=(t,x)=>t.find(r=>x<=r[0])[1];
 function cadence(s){
@@ -169,14 +169,40 @@ function updCad(){
   let big='–';
   if(c.V){big=c.D<1?`Votre solde atteint ${T} palettes en <em>${Math.ceil(12/c.perYear)} mois</em>`:c.interval>=1.5?`Une livraison de <b>${T} palettes</b> tous les <em>${fd(c.interval)} jours</em>`:`<em>${(c.perYear/365).toFixed(1).replace('.',',')} livraisons</em> de <b>${T} palettes</b> par jour`}
   $('#cad-big').innerHTML=big;
-  $('#cad-sub').textContent=c.V?(c.D<1?'Au rythme de vos expéditions, aucune livraison complète n’intervient sur les 12 prochains mois.':`Première livraison environ ${fd(c.interval)} jours après le démarrage. En fin d’année, ${nf.format(Math.round(c.rest))} palettes restent en solde, reportées.`):'';
+  $('#cad-sub').textContent=c.V&&c.D<1?'Au rythme de vos expéditions, aucune livraison complète n’intervient sur les 12 prochains mois.':'';
   $('#cad-n').textContent=c.V?(c.D<1?'< 1':nf.format(c.D)):'–';
+  {const t=c.D*CFG.kmEvites*CFG.kgCo2Km/1000;$('#cad-co2').textContent=c.V&&c.D>=1?'≈ '+(t<10?t.toFixed(1).replace('.',','):nf.format(Math.round(t))):'–'}
   const mx=Math.max(1,...c.months.map(m=>m.count));
   $('#cad-chart').innerHTML=c.months.map(m=>`<div class="cm" title="${esc(m.label)} : ${m.count} livraison${m.count>1?'s':''}"><b>${m.count}</b><div class="bw"><i style="height:${Math.max(3,m.count/mx*100).toFixed(0)}%"></i></div><span><em class="ml">${esc(m.label)}</em><em class="ms">${esc(m.label[0].toUpperCase())}</em></span></div>`).join('');
   $('#cad-sites').textContent=(c.N>1&&c.D>=1)?`Sur vos ${c.N} sites, chacun serait livré environ tous les ${fd(365*c.N/c.D)} jours.`:'';
   const n0=c.siteCounts[0],slow=c.N>1&&c.D>=1&&(n0===0||365/n0>60);
   $('#cad-tip').innerHTML=ic('arrow',14)+'<span>'+(!c.V?'Renseignez votre volume pour voir votre cadencier.':c.D<1?'Chaque livraison est de '+T+' palettes : dès que votre solde les atteint, elle est programmée sur le site de votre choix.':slow?`En regroupant vos livraisons sur un seul site, vous êtes livré tous les <b>${fd(c.interval)} jours</b> au lieu de ${n0?fd(365/n0):'jamais sur 12 mois'}. Vous choisissez le site de livraison.`:c.N>1?'Chaque livraison de '+T+' palettes va sur un seul site, à tour de rôle ou selon vos instructions. Vous indiquez à notre équipe dédiée le site de livraison.':'Vous choisissez le site de livraison : un seul, ou plusieurs selon vos besoins.')+'</span>';
   $('#cad-tip').style.display=slow?'':'none';
+}
+function bindGauge(){
+  const g=$('#gauge');if(!g)return;
+  const lo=0.5,hi=2.5,field=()=>$('[data-k="gestion"]');
+  const at=e=>{const b=g.getBoundingClientRect();return Math.round((lo+(hi-lo)*clamp((e.clientX-b.left)/b.width,0,1))*100)/100};
+  const set=v=>{const f=field();f.value=String(+v.toFixed(2));f.dispatchEvent(new Event('input',{bubbles:true}))};
+  const done=()=>field().dispatchEvent(new Event('change',{bubbles:true}));
+  let drag=false;
+  g.addEventListener('selectstart',e=>e.preventDefault());
+  const ghost=$('#mk-ghost'),tg=$('#t-ghost');
+  g.addEventListener('pointerdown',e=>{drag=true;g.classList.remove('hov');g.classList.add('drag');g.setPointerCapture(e.pointerId);set(at(e))});
+  g.addEventListener('pointermove',e=>{
+    if(drag){set(at(e));return}
+    if(e.pointerType!=='mouse')return;
+    const v=at(e),p=calc({...S,gestion:v});
+    g.classList.add('hov');ghost.style.left=((v-lo)/(hi-lo)*100)+'%';tg.textContent=`${eur2(v)} · ${sgnR(p.net)}`;tg.classList.toggle('neg',p.net<=0);
+  });
+  g.addEventListener('pointerleave',()=>{g.classList.remove('hov');ghost.style.left='';tg.textContent='Glissez';tg.classList.remove('neg')});
+  const end=()=>{if(!drag)return;drag=false;g.classList.remove('drag');done()};
+  g.addEventListener('pointerup',end);g.addEventListener('pointercancel',end);
+  g.addEventListener('keydown',e=>{
+    const k=e.key;if(!['ArrowRight','ArrowUp','ArrowLeft','ArrowDown','Home','End'].includes(k))return;e.preventDefault();
+    const cur=+field().value||Math.round(calc(S).seuil*100)/100,st=e.shiftKey?0.10:0.01;
+    set(clamp(k==='Home'?lo:k==='End'?hi:cur+((k==='ArrowRight'||k==='ArrowUp')?st:-st),lo,hi));done();
+  });
 }
 function updHero(r){
   const p=Math.min(100,25+Math.round(75*FILL.filter(filled).length/FILL.length)),n=nextStep();
@@ -192,7 +218,7 @@ function setupSteps(){
 }
 function viewSim(){
   $('#view').innerHTML=`
-  <div class="hero-t"><div class="crumb" aria-label="Où vous êtes"><span>Plateforme MagicPallet</span><i>›</i><span>Process palettes Carrefour</span><i>›</i><b>Simulation</b></div><h1>Combien allez-vous économiser ?</h1><p class="lead">Entrez votre volume et ce que vos transporteurs vous facturent par palette : votre gain apparaît aussitôt.</p>
+  <div class="hero-t"><h1>Combien allez-vous économiser ?</h1>
    <ul class="trust"><li>${CFG.logoCarrefour?'<span class="cfpill"><img src="'+CF_IMG+'" alt="Carrefour" width="25" height="20"></span>':ic('check',13)}Process intégré aux accords RSE de Carrefour</li><li>${ic('check',13)}100 % des entrepôts Carrefour en France</li></ul></div>
   <nav class="steps" id="steps" aria-label="Étapes de la simulation"><button type="button" data-s="sec-flux"><i>1</i>Votre situation</button><button type="button" data-s="sec-mp"><i>2</i>Votre tarif</button><button type="button" data-s="sec-cad"><i>3</i>Votre cadencier</button><button type="button" data-s="sec-couts"><i>4</i>Pour affiner</button></nav>
   <div class="sim"><div>
@@ -201,11 +227,16 @@ function viewSim(){
       <div class="cards">
       <div class="card span2"><div class="ch"><span class="bd">${ic('boxes',18)}</span><div><h3>Palettes EUR livrées chez Carrefour</h3><p>Par an, tous entrepôts confondus</p></div></div>
         <div class="inp"><input id="in-volume" data-k="volume" type="number" min="1000" step="1000" inputmode="numeric" aria-label="Palettes livrées par an"><span>palettes / an</span></div>
-        <input id="rg-volume" type="range" min="0" max="100" step="0.5" aria-label="Volume annuel (échelle logarithmique)"><div class="hint" id="h-volume"></div></div>
-      ${cardStep('sites','Sites d’expédition','Ceux qui livrent des entrepôts Carrefour','warehouse',1,500)}
-      <div class="card span3"><div class="ch"><span class="bd">${ic('coins',18)}</span><div><h3>Ce que vos transporteurs vous facturent, par palette</h3><p>Ligne « gestion palettes » de leurs factures : gestion et retour des palettes EUR. Un ordre de grandeur suffit.</p></div></div>
-        <div class="inp" id="w-gestion"><input data-k="gestion" type="number" min="0" step="0.05" inputmode="decimal" placeholder="à renseigner" aria-label="Montant facturé par vos transporteurs pour la gestion des palettes, par palette"><span>€ HT / palette</span></div>
-        <p class="hint">Montant annuel de cette ligne ÷ palettes livrées.<span class="fine" style="display:block;margin-top:6px">À titre informatif : nous constatons généralement une fourchette de 1 € à 2 € par palette.</span></p><span class="chip" id="c-gestion"></span></div>
+        <input id="rg-volume" type="range" min="0" max="100" step="0.5" aria-label="Volume annuel (échelle logarithmique)"></div>
+      ${cardStep('sites','Sites d’expédition','Ceux qui expédient vers vos clients','warehouse',1,500)}
+      <div class="card span3 kc kc-empty" id="key-card"><div class="ch"><span class="bd">${ic('coins',18)}</span><div><h3>Combien vos transporteurs vous facturent-ils pour la gestion des palettes EUR ?</h3><p>Hors prix du transport : souvent une ligne « gestion palettes » sur leurs factures, sinon demandez-leur. Un ordre de grandeur suffit.</p></div></div>
+        <div class="inp" id="w-gestion"><input data-k="gestion" type="number" min="0" step="0.01" inputmode="decimal" placeholder="à renseigner" aria-label="Montant facturé par vos transporteurs pour la gestion des palettes, par palette"><span>€ HT / palette</span></div>
+        <div class="gz" id="gz">
+          <div class="gauge" id="gauge" role="slider" tabindex="0" aria-label="Montant facturé par vos transporteurs, par palette" aria-valuemin="0.5" aria-valuemax="2.5" aria-valuenow="0.5"><i class="fill" id="g-fill" style="display:none"></i><span class="mk thr" id="mk-thr"><b id="t-thr"></b></span><span class="mk ghost" id="mk-ghost"><b id="t-ghost">Glissez</b></span><span class="mk you" id="mk-you"><b id="t-you"></b></span></div>
+          <div class="gauge-sc"><span>0,50 €</span><span>2,50 € par palette</span></div>
+          <div class="g-band"><i></i><span>fourchette habituelle, à titre informatif</span></div>
+          <div class="gz-k"><b id="gz-kv" class="blank">+ ••• €</b><span id="g-msg"></span></div></div>
+        <span class="chip" id="c-gestion"></span></div>
       <div class="cards two" style="grid-column:1/-1">
         <div class="card hasw"><button type="button" class="why" data-why="temps" aria-expanded="false" aria-label="Comment on estime le temps de suivi">?</button><div class="ch"><span class="bd">${ic('clock',18)}</span><div><h3>Temps passé à suivre les soldes et à relancer</h3><p>Rapprochement des soldes avec les transporteurs, désaccords, e-mails et appels, facturation des dettes non soldées</p></div></div>
           <div class="inp"><input data-k="heures" type="number" min="0" step="1" inputmode="numeric" aria-label="Heures par mois"><span>heures / mois</span></div><p class="why-p" id="why-temps" hidden></p><span class="chip" id="c-temps"></span></div>
@@ -226,9 +257,8 @@ function viewSim(){
       
       <p class="nudge" id="nudge"></p>
       <details class="adv slim" id="adv-incl"><summary>${ic('chev',14)}<span>Ce que comprend votre abonnement</span></summary><ul class="incl">
-        <li><b>Usage de la plateforme</b> : tableau de bord, flux et soldes, stocks, carte, coûts et bilan carbone, pour tous les types de supports de manutention.</li>
-        <li><b>Consolidation et avance des palettes</b> : votre solde consolidé sur tous les entrepôts Carrefour, et les palettes avancées par MagicPallet.</li>
-        <li><b>Au-delà de Carrefour</b> : la plateforme gère aussi vos autres partenaires et vos autres flux ; les conditions se précisent avec votre expert.</li></ul></details>
+        <li><b>Usage de la plateforme</b> : tableau de bord, flux et soldes, stocks, carte, coûts et bilan carbone, pour tous vos types de supports de manutention, avec tous vos clients, transporteurs et fournisseurs.</li>
+        <li><b>Consolidation et avance des palettes</b> : votre solde consolidé sur tous les entrepôts Carrefour, et les palettes avancées par MagicPallet.</li></ul></details>
       <details class="adv slim" id="adv-stair"><summary>${ic('chev',14)}<span>Voir les paliers de tarif</span><em id="stair-c"></em></summary>
         <div class="stair" id="stair" role="img" aria-label="Paliers de tarif de relocalisation selon le volume annuel"></div>
         <div class="stair-ax"><span>5 000 palettes</span><span></span><span>500 000+</span></div></details>
@@ -236,7 +266,7 @@ function viewSim(){
       </section>
     <section class="panel" id="sec-cad"><h2>Votre cadencier de récupération</h2>
       <div class="cad-hero"><div><div class="big-t" id="cad-big">–</div><span class="sub" id="cad-sub"></span><span class="chip" style="display:inline-block;margin-top:10px">Rythme modulable selon vos capacités de stockage</span></div>
-        <div class="cad-k"><div><b id="cad-n">–</b><small>livraisons par an</small></div></div></div>
+        <div class="cad-k"><div><b id="cad-n">–</b><small>livraisons par an</small></div><div><b id="cad-co2">–</b><small>tonnes de CO₂ évitées par an (estimation)<button type="button" class="why in" data-why="co2" aria-expanded="false" aria-label="Comment on estime les économies de CO₂">?</button></small></div></div><p class="why-p" id="why-co2" hidden style="flex-basis:100%"></p></div>
       <div class="cad-chart" id="cad-chart" role="img" aria-label="Livraisons prévues, mois par mois"></div>
       <p class="fine" id="cad-sites" style="margin:10px 2px 0"></p>
       <p class="nudge" id="cad-tip"></p>
@@ -259,16 +289,15 @@ function viewSim(){
   </div>
   <aside class="sim-out"><div class="res" id="res">
     <div class="res-hero"><span class="k"><i class="ex" id="ex-chip">À compléter</i><span id="hero-k">Seuil de rentabilité</span></span><strong id="r-net">–</strong><span class="sub" id="r-sub"></span>
-      <div class="tl" id="tl" hidden><div class="tl-h"><span id="tl-t">Économies cumulées</span><div class="tl-seg" role="group" aria-label="Horizon"><button type="button" data-h="12">1 an</button><button type="button" data-h="36" class="on">3 ans</button><button type="button" data-h="60">5 ans</button></div></div>
-        <svg id="tl-svg" viewBox="0 0 400 120" role="img" aria-label="Économies cumulées, mois après mois"></svg>
+      <div class="tlc" id="tl" hidden><div class="tl-h"><span id="tl-t">Économies cumulées</span><div class="tl-seg" role="group" aria-label="Horizon"><button type="button" data-h="12">1 an</button><button type="button" data-h="36" class="on">3 ans</button><button type="button" data-h="60">5 ans</button></div></div>
+        <svg id="tl-svg" viewBox="0 0 400 100" role="img" aria-label="Économies cumulées, mois après mois"></svg>
         <div class="tl-k"><b id="tl-v">–</b><span id="tl-s"></span></div></div>
-      <div class="chips"><span><span id="r-mpl">Coût MagicPallet par an</span> <b id="r-mpt">–</b></span></div>
+      <div class="chips"><span><span id="r-mpl">Coût MagicPallet par an</span> <b id="r-mpt">–</b></span><span id="r-co2c" hidden><span id="r-co2l">CO₂ évité</span> <b id="r-co2">–</b></span></div>
       <div class="prec"><div class="prec-t"><span id="prec-l"></span><b id="prec-p"></b></div><div class="prec-b"><i id="prec-i"></i></div><button class="next" id="next-step" type="button"></button></div></div>
     <div class="res-body">
       <div class="acts"><button class="btn primary" id="b-contact">${ic('phone',16)}<span>En discuter ensemble</span></button><p class="fine c">Ou <a id="book-link" href="${CONTACT.book}" target="_blank" rel="noopener noreferrer">réservez directement un créneau</a></p></div>
       <div class="msg" id="r-msg"></div>
-      <div><h4>Où vous vous situez</h4><div class="gauge" id="gauge"><span class="mk thr" id="mk-thr"><b id="t-thr"></b></span><span class="mk you" id="mk-you"><b id="t-you"></b></span></div><div class="gauge-sc"><span>0,50 €</span><span>2,50 € par palette</span></div></div>
-      <p class="fine" id="sens" style="margin:-6px 0 2px"></p>
+      
       <details class="adv slim" id="adv-cost"><summary>${ic('chev',14)}<span>Détail des coûts annuels</span></summary><div class="bars">
         <div><div class="bar-l"><span>Aujourd’hui</span><b id="bt-t"></b></div><div class="bar" id="bar-t"></div></div>
         <div><div class="bar-l"><span>Avec MagicPallet</span><b id="bt-m"></b></div><div class="bar" id="bar-m"></div></div>
@@ -315,6 +344,7 @@ function bindSim(){
   $('#cad-more').addEventListener('click',()=>openTeaser('relocalisation'));
   $('#b-contact').addEventListener('click',()=>openContact('simulation'));
   $('#book-link').addEventListener('click',()=>{Tr.log('contact_open',{ctx:'booking'});Tr.flush()});
+  bindGauge();
   $('#b-export').addEventListener('click',exportCsv);
 }
 function syncInputs(){
@@ -322,16 +352,22 @@ function syncInputs(){
   const v=$('#rg-volume');if(v)syncVolume();
 }
 function syncVolume(){$('#rg-volume').value=clamp(100*Math.log10(Math.max(1000,S.volume)/1000)/3,0,100);updHint()}
-function updHint(){$('#h-volume').textContent=`Soit ${nf.format(Math.floor(S.volume/CFG.seuil))} complets de ${CFG.seuil} palettes par an.`}
+function updHint(){}
 let TLH=36,TLanim=true;
+function setCo2Chip(months,label){
+  const el=$('#r-co2c');if(!el)return;const c=cadence(S);
+  if(!(c.V&&c.D>=1)){el.hidden=true;return}
+  const t=c.D*CFG.kmEvites*CFG.kgCo2Km/1000*months/12;
+  el.hidden=false;$('#r-co2l').textContent='CO₂ évité '+label;$('#r-co2').textContent='≈ '+(t<10?t.toFixed(1).replace('.',','):nf.format(Math.round(t)))+' t';
+}
 function updTL(r,showEx,exNet){
   const box=$('#tl');if(!box)return;
   const net=r.hasG?r.net:(showEx?exNet:null);
-  if(net==null||!r.V){box.hidden=true;TLanim=true;$('#r-mpl').textContent='Coût MagicPallet par an';$('#r-mpt')._v=null;$('#r-mpt').textContent=eur(r.mp.total);return}
+  if(net==null||!r.V){box.hidden=true;TLanim=true;$('#r-mpl').textContent='Coût MagicPallet par an';$('#r-mpt')._v=null;$('#r-mpt').textContent=eur(r.mp.total);setCo2Chip(12,'par an');return}
   box.hidden=false;
   $('#tl-t').textContent=r.hasG?'Économies cumulées':'Exemple · économies cumulées';
   $$('#tl [data-h]').forEach(b=>b.classList.toggle('on',+b.dataset.h===TLH));
-  const H=TLH,W=400,HT=120,top=14,bot=24,pad=6,pos=net>=0,span=HT-top-bot,y0=pos?HT-bot:top,per=net/12,maxA=Math.max(Math.abs(per*H),1),bw=(W-2*pad)/H;
+  const H=TLH,W=400,HT=100,top=12,bot=22,pad=6,pos=net>=0,span=HT-top-bot,y0=pos?HT-bot:top,per=net/12,maxA=Math.max(Math.abs(per*H),1),bw=(W-2*pad)/H;
   let bars='';
   for(let m=1;m<=H;m++){const h=Math.max(1.5,Math.abs(per*m)/maxA*span),x=pad+(m-1)*bw;
     bars+=`<rect class="tl-bar${TLanim?' anim':''}${pos?'':' neg'}" x="${x.toFixed(2)}" y="${(pos?y0-h:y0).toFixed(2)}" width="${Math.max(1,bw-1.2).toFixed(2)}" height="${h.toFixed(2)}" rx="1.5" style="animation-delay:${Math.min(m*7,420)}ms"/>`}
@@ -339,10 +375,12 @@ function updTL(r,showEx,exNet){
   for(let y=1;y<=H/12;y++){const x=pad+y*12*bw-bw/2;marks+=`<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${top}" y2="${HT-bot+4}" stroke="rgba(255,255,255,.18)" stroke-dasharray="2 3"/><text x="${x.toFixed(1)}" y="${HT-6}" text-anchor="middle" font-size="10" fill="#B5BBF2">An ${y}</text>`}
   $('#tl-svg').innerHTML=`<defs><linearGradient id="tlg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#1FB99A"/><stop offset="1" stop-color="#3CDAB9"/></linearGradient></defs><line x1="${pad}" x2="${W-pad}" y1="${y0}" y2="${y0}" stroke="rgba(255,255,255,.35)"/>${marks}${bars}`;
   TLanim=false;
-  tween($('#tl-v'),per*H,v=>sgnR(v));$('#r-mpl').textContent='Coût MagicPallet sur '+(H/12)+' an'+(H>12?'s':'');tween($('#r-mpt'),r.mp.total/12*H,v=>eur(v));$('#tl-v').classList.toggle('neg',net<0);$('#tl-s').textContent=`sur ${H/12} an${H>12?'s':''}`;
+  tween($('#tl-v'),per*H,v=>sgnR(v));$('#r-mpl').textContent='Coût MagicPallet sur '+(H/12)+' an'+(H>12?'s':'');tween($('#r-mpt'),r.mp.total/12*H,v=>eur(v));setCo2Chip(H,'sur '+(H/12)+' an'+(H>12?'s':''));$('#tl-v').classList.toggle('neg',net<0);$('#tl-s').textContent=`sur ${H/12} an${H>12?'s':''}`;
 }
 document.addEventListener('click',e=>{const h=e.target.closest&&e.target.closest('#tl [data-h]');if(h){TLH=+h.dataset.h;TLanim=true;Tr.log('advanced_open',{what:'horizon:'+TLH});update()}});
 function whyHtml(k){
+  if(k==='co2'){const c=cadence(S),t=c.D*CFG.kmEvites*CFG.kgCo2Km/1000,f=CFG.kgCo2Km.toFixed(2).replace('.',',');
+    return `Chaque relocalisation supprime en moyenne près de ${CFG.kmEvites} km de transport poids lourd : c’est la moyenne constatée chez nos clients actuels, pour des palettes qui auraient sinon voyagé en camion de bout en bout. Facteur d’émission : 3,10 kg de CO₂e par litre de gazole routier (Base Empreinte ADEME, production du carburant comprise) × 0,342 litre par km pour un ensemble articulé de 40 tonnes (valeur par défaut de l’information GES), soit ${f} kg de CO₂e par km.<br><br>Calcul : ${nf.format(c.D)} relocalisations × ${CFG.kmEvites} km × ${f} kg ≈ ${t<10?t.toFixed(1).replace('.',','):nf.format(Math.round(t))} tonnes de CO₂ évitées par an.<br><br><b>Estimation grossière</b> : elle sera affinée au fil de la collaboration, d’après vos relocalisations réellement effectuées. Les économies de CO₂ constatées sur ces relocalisations sont valables officiellement dans vos rapports publics et autres dispositifs de valorisation officiels.<br><br>Sources : <a href="https://base-empreinte.ademe.fr/" target="_blank" rel="noopener noreferrer">Base Empreinte ADEME</a> ; <a href="https://projetcelsius.com/blog/bilan-carbone-transporteur-routier/" target="_blank" rel="noopener noreferrer">exemple de calcul détaillé</a>.`}
   if(k==='temps')return `Coût = heures par mois × 12 × coût horaire complet (${eur(+S.tauxHoraire||0)} par heure).<br><br><b>Pourquoi 30 € par défaut ?</b> Pour un employé avec quelques années d’ancienneté (1,2 à 1,4 Smic, soit 2 240 à 2 610 € bruts par mois), le coût employeur est de 21 à 26 € par heure travaillée : charges patronales de 25 à 35 %, 1 607 heures par an. On y ajoute environ 20 % de frais indirects (poste de travail, encadrement, formation), d’où 30 €. À titre de comparaison, le coût horaire moyen tous métiers confondus est de 44,7 € (Insee, 2025).<br><br>Le coût horaire se modifie dans « Pour affiner », rubrique Hypothèses avancées.<br>Sources : <a href="https://www.insee.fr/fr/statistiques/8733109" target="_blank" rel="noopener noreferrer">Insee, coût du travail</a> ; <a href="https://www.info.gouv.fr/public/index.php/actualite/le-smic-revalorise-le-1er-juin-2026" target="_blank" rel="noopener noreferrer">Smic au 1er juin 2026</a> ; <a href="https://payfit.com/fr/fiches-pratiques/comment-calculer-le-cout-dun-salarie/" target="_blank" rel="noopener noreferrer">PayFit, coût d’un salarié</a>.`;
   return `Des palettes qui attendent leur retour, c’est un stock en plus, qui coûte chaque année : du capital immobilisé (${S.taux} %) et des frais de stockage (${S.fraisStock} % : personnel, locaux, assurance), soit ${(+S.taux||0)+(+S.fraisStock||0)} % de sa valeur. Exemple : 10 000 € de palettes en attente coûtent ${eur(10000*((+S.taux||0)+(+S.fraisStock||0))/100)} par an.<br><br><b>Pourquoi ${CFG.pallPerPair} palettes ?</b> Pour un transporteur et un entrepôt Carrefour donnés, les palettes dues s’accumulent de 0 à 495, puis l’entrepôt les rend d’un coup et le compteur repart de 0. En moyenne, le compteur est à mi-chemin : environ ${CFG.pallPerPair} palettes en attente. Avec ${S.transporteurs} transporteurs et ${S.entrepots} entrepôts, cela fait ${S.transporteurs*S.entrepots} compteurs, soit ${nf.format(S.transporteurs*S.entrepots*CFG.pallPerPair)} palettes en attente en moyenne.<svg viewBox="0 0 360 78" width="100%" style="max-width:340px;display:block;margin:8px 0 4px" role="img" aria-label="Le compteur de palettes dues monte de 0 à 495 puis retombe à 0 : en moyenne, environ 247"><line x1="8" y1="66" x2="352" y2="66" stroke="currentColor" stroke-opacity=".25"/><polyline fill="none" stroke="var(--mint-deep)" stroke-width="2.5" stroke-linejoin="round" points="10,66 100,14 100,66 190,14 190,66 280,14"/><line x1="8" y1="40" x2="352" y2="40" stroke="currentColor" stroke-opacity=".6" stroke-dasharray="4 4"/><text x="12" y="10" font-size="10" fill="currentColor">495</text><text x="356" y="35" text-anchor="end" font-size="10" fill="currentColor">≈ ${CFG.pallPerPair} en moyenne</text><text x="12" y="77" font-size="10" fill="currentColor">0</text></svg>Calcul : palettes en attente × ${eur(+S.valPal||0)} × ${(+S.taux||0)+(+S.fraisStock||0)} % par an (15 % de votre volume au maximum).<br><br>Estimation prudente : on ne compte ni l’obsolescence ni les pertes, alors qu’un stock coûte souvent 20 à 30 % de sa valeur par an, tout compris.<br>Sources : <a href="https://www.pennylane.com/fr/fiches-pratiques/comptabilite/cout-de-stockage-ecommerce" target="_blank" rel="noopener noreferrer">Pennylane, coût de stockage</a> ; <a href="https://openclassrooms.com/courses/6059131-pilotez-la-supply-chain-dans-l-industrie-du-futur/6501506-suivez-les-couts-de-votre-supply-chain" target="_blank" rel="noopener noreferrer">OpenClassrooms, coûts de la supply chain</a>.`;
 }
@@ -361,7 +399,7 @@ function update(k){
   $('#c-urgence').textContent=`= ${eur(r.it.urgence)} par an`;
   $('#c-perdues').textContent=`= ${eur(r.it.perdues)} par an`;
   $('#mp-r-pu').textContent=eur2(r.mp.unit);$('#mp-r-tier').textContent=`Palier ${r.mp.tierLabel}, tarif fixé pour 12 mois.`;$('#mp-r-an').textContent=`${nf.format(r.V)} palettes × ${eur2(r.mp.unit)} = ${eur(r.mp.reloc)} par an`;
-  $('#mp-l-m').textContent=eur(r.mp.logM);$('#mp-l-sub').textContent=`Accès à la plateforme MagicPallet. Tranche : ${rangeLbl(CFG.logiciel,+S.sites||1,'site expédiant vers Carrefour','sites expédiant vers Carrefour')}.`;
+  $('#mp-l-m').textContent=eur(r.mp.logM);$('#mp-l-sub').textContent=`Pilotage de tous vos flux, soldes et stocks de supports de manutention, avec tous vos partenaires. Tranche : ${rangeLbl(CFG.logiciel,+S.sites||1,'site d’expédition','sites d’expédition')}.`;
   $('#mp-c-m').textContent=eur(r.mp.conM);$('#mp-c-sub').textContent=`Nous consolidons vos soldes sur tous les entrepôts Carrefour et vous avançons les palettes : livré dès 495 palettes, sans attendre qu’un entrepôt ou un transporteur ait cumulé son complet.`;
   $('#mp-s-m').textContent=eur(r.mp.logM+r.mp.conM);$('#mp-s-an').textContent=`${eur(r.mp.logM+r.mp.conM)} × 12 = ${eur(r.mp.logiciel+r.mp.conso)} par an`;
   tween($('#mp-t'),r.mp.total,v=>eur(v)+' par an');$('#mp-t-sub').textContent=r.V?`soit ${eur2(r.mp.total/r.V)} par palette.`:'';
@@ -392,8 +430,16 @@ function update(k){
   }
   updTL(r,showEx,exNet);
   const lo=0.5,hi=2.5,pc=x=>clamp((x-lo)/(hi-lo),0,1)*100;
-  $('#gauge').style.setProperty('--sp',pc(r.seuil)+'%');$('#mk-thr').style.left=pc(r.seuil)+'%';const you=$('#mk-you');you.style.display=(r.hasG||showEx)?'':'none';you.classList.toggle('ex',!r.hasG&&showEx);if(r.hasG)you.style.left=pc(r.g)+'%';else if(showEx)you.style.left=pc(exg)+'%';
-  $('#t-thr').textContent=r.seuil<=lo?`Seuil < ${eur2(lo)}`:r.seuil>=hi?`Seuil > ${eur2(hi)}`:`Seuil ${eur2(r.seuil)}`;$('#t-you').textContent=r.hasG?`Vous : ${eur2(r.g)}`:`Exemple : ${eur2(exg||0)}`;
+  $('#gauge').style.setProperty('--sp',pc(r.seuil)+'%');$('#mk-thr').style.left=pc(r.seuil)+'%';const you=$('#mk-you');you.style.display=r.hasG?'':'none';if(r.hasG)you.style.left=pc(r.g)+'%';
+  $('#t-thr').textContent=r.seuil<=lo?`Seuil < ${eur2(lo)}`:r.seuil>=hi?`Seuil > ${eur2(hi)}`:`Seuil ${eur2(r.seuil)}`;$('#t-you').textContent=`Vous : ${eur2(r.g)}`;
+  {const gz=$('#gauge');gz.setAttribute('aria-valuenow',String(r.hasG?clamp(r.g,lo,hi):lo));gz.setAttribute('aria-valuetext',r.hasG?`${eur2(r.g)} par palette`:'Pas encore renseigné');
+   const kv=$('#gz-kv'),sg=r.hasG?(r.net>0?1:-1):0;
+   if(r.hasG){tween(kv,r.net,v=>sgnR(v))}else{cancelAnimationFrame(kv._r);kv._v=null;kv.textContent='+ ••• €'}
+   if(kv._s&&sg&&kv._s!==sg){kv.classList.remove('pop');void kv.offsetWidth;kv.classList.add('pop')}kv._s=sg;
+   kv.classList.toggle('neg',r.hasG&&r.net<0);kv.classList.toggle('blank',!r.hasG);$('#key-card').classList.toggle('kc-empty',!r.hasG);
+   $('#g-msg').textContent=r.hasG?(r.net>0?`d’économies par an, à ${eur2(r.g)} la palette`:`par an : pas d’économie à ${eur2(r.g)} la palette`):'Glissez, ou saisissez votre montant : votre gain se révèle';
+   gz.classList.toggle('idle',!r.hasG);
+   const fl=$('#g-fill');if(r.hasG){const a0=pc(r.seuil),b0=pc(r.g);fl.style.left=Math.min(a0,b0)+'%';fl.style.width=Math.abs(b0-a0)+'%';fl.classList.toggle('neg',r.g<r.seuil);fl.style.display=''}else fl.style.display='none'}
   const mx=Math.max(r.total,r.mp.total,1),seg=(vals,cls)=>vals.map((v,i)=>`<i style="width:${v/mx*100}%;background:var(${cls[i]})"></i>`).join('');
   $('#bar-t').innerHTML=seg([r.it.gestion,r.it.temps,r.it.stock,r.it.urgence,r.it.perdues],['--s1','--s2','--s3','--s4','--s5']);
   $('#bar-m').innerHTML=seg([r.mp.reloc,r.mp.logiciel,r.mp.conso],['--mint','--mint','--mint']);
@@ -402,7 +448,7 @@ function update(k){
   const row=(c,n,v)=>`<span class="n" style="--c:${c}">${n}</span><span class="v">${typeof v==='string'?v:eur(v)}</span>`;
   $('#lg').innerHTML=[row('var(--s1)','Gestion palettes',r.hasG?r.it.gestion:'à renseigner'),row('var(--s2)','Temps de suivi',r.it.temps),row('var(--s3)','Stock immobilisé',r.it.stock),row('var(--s4)','Achats d’urgence',r.it.urgence),row('var(--s5)','Palettes non récupérées',r.it.perdues),
     row('var(--mint)',`Relocalisation (${eur2(r.mp.unit)} / palette)`,r.mp.reloc),row('var(--mint)','Abonnement : usage de la plateforme',r.mp.logiciel),row('var(--mint)','Abonnement : consolidation et avance',r.mp.conso)].join('');
-  $('#sens').textContent=r.V?`Chaque 10 centimes de plus facturés par vos transporteurs ajoutent ${eur(r100(r.V*0.1))} à votre gain par an.`:'';
+  
   if(userTouched&&r.hasG){clearTimeout(simTimer);simTimer=setTimeout(()=>{const c=calc(S);
     Tr.log('simulation',{inputs:Object.assign({},S,{stock:c.stock}),net:Math.round(c.net),total:Math.round(c.total),mpTotal:Math.round(c.mp.total),seuil:+c.seuil.toFixed(2)});userTouched=false},1800)}
 }
