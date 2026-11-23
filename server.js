@@ -18,6 +18,8 @@ export const pool = new pg.Pool({
 
 export async function migrate() {
   await pool.query(fs.readFileSync(path.join(__dirname, 'db/schema.sql'), 'utf8'));
+  const old = await pool.query("SELECT id, first_name, last_name, company FROM prospects WHERE ident_key IS NULL");
+  for (const r of old.rows) await pool.query('UPDATE prospects SET ident_key = $2 WHERE id = $1', [r.id, identKey(r.first_name, r.last_name, r.company)]);
 }
 
 /* ---------- utilitaires ---------- */
@@ -28,6 +30,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const newToken = () => crypto.randomBytes(18).toString('base64url');
 const cut = (v, n = 120) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const normText = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const identKey = (f, l, c) => [f, l, c].map(normText).join('|');
 const parseCookies = (h) => Object.fromEntries((h || '').split(';').map((s) => s.trim()).filter(Boolean)
   .map((s) => { const i = s.indexOf('='); return [s.slice(0, i), decodeURIComponent(s.slice(i + 1))]; }));
 const setVisitor = (res, token) => res.cookie(COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: isProd, maxAge: 365 * 864e5, path: '/' });
@@ -127,6 +131,7 @@ app.get('/api/me', wrap(async (req, res) => {
   const p = await visitorOf(req);
   if (!p) return res.json({ profile: null, firstVisit: true });
   const v = await pool.query('SELECT 1 FROM visits WHERE prospect_id = $1 LIMIT 1', [p.id]);
+  setVisitor(res, p.token);
   res.json({ profile: publicProfile(p), firstVisit: v.rowCount === 0 });
 }));
 
@@ -134,17 +139,25 @@ app.post('/api/profile', limiter(20), jsonBody, wrap(async (req, res) => {
   const b = req.body || {};
   const first = cut(b.first, 80), last = cut(b.last, 80), company = cut(b.company, 120), email = cut(b.email, 160);
   if (first.length < 2 || last.length < 2 || company.length < 2 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return res.status(400).json({ error: 'invalid' });
-  let p = await visitorOf(req);
+  const key = identKey(first, last, company);
+  let p = await visitorOf(req), reused = false;
+  if (!p) {
+    // Même personne sur un autre navigateur ou après effacement des cookies : on la retrouve (même e-mail, ou même nom + société) au lieu de la dédoubler.
+    let q = null;
+    if (email) q = (await pool.query('SELECT * FROM prospects WHERE lower(email) = lower($1) ORDER BY created_at LIMIT 1', [email])).rows[0];
+    if (!q) q = (await pool.query("SELECT * FROM prospects WHERE ident_key = $1 AND (COALESCE(email, '') = '' OR $2 = '' OR lower(email) = lower($2)) ORDER BY created_at LIMIT 1", [key, email])).rows[0];
+    if (q) { p = q; reused = true; }
+  }
   if (p) {
     const { rows } = await pool.query(
-      'UPDATE prospects SET first_name=$2, last_name=$3, company=$4, email=COALESCE(NULLIF($5,\'\'), email) WHERE id=$1 RETURNING *', [p.id, first, last, company, email]);
-    p = rows[0];
+      'UPDATE prospects SET first_name=$2, last_name=$3, company=$4, ident_key=$6, email=COALESCE(NULLIF($5,\'\'), email) WHERE id=$1 RETURNING *', [p.id, first, last, company, email, key]);
+    p = rows[0]; if (reused) setVisitor(res, p.token);
   } else {
     const { rows } = await pool.query(
-      'INSERT INTO prospects(token, first_name, last_name, company, email) VALUES ($1,$2,$3,$4,NULLIF($5,\'\')) RETURNING *', [newToken(), first, last, company, email]);
+      'INSERT INTO prospects(token, first_name, last_name, company, email, ident_key) VALUES ($1,$2,$3,$4,NULLIF($5,\'\'),$6) RETURNING *', [newToken(), first, last, company, email, key]);
     p = rows[0]; setVisitor(res, p.token);
   }
-  res.json({ profile: publicProfile(p) });
+  res.json({ profile: { first, last, company, email } });   // on ne renvoie jamais l'e-mail enregistré d'une autre saisie
 }));
 
 app.post('/api/track', limiter(120), jsonBody, wrap(async (req, res) => {
@@ -219,8 +232,8 @@ app.post('/api/admin/invitations', jsonBody, wrap(async (req, res) => {
   const first = cut(b.first, 80), last = cut(b.last, 80), company = cut(b.company, 120), email = cut(b.email, 160);
   if (!first && !company) return res.status(400).json({ error: 'invalid' });
   const { rows } = await pool.query(
-    "INSERT INTO prospects(token, first_name, last_name, company, email, source) VALUES ($1,$2,$3,$4,NULLIF($5,''),'invitation') RETURNING token, id",
-    [newToken(), first, last, company, email]);
+    "INSERT INTO prospects(token, first_name, last_name, company, email, source, ident_key) VALUES ($1,$2,$3,$4,NULLIF($5,''),'invitation',$6) RETURNING token, id",
+    [newToken(), first, last, company, email, identKey(first, last, company)]);
   res.json({ id: rows[0].id, url: `${baseUrl(req)}/p/${rows[0].token}` });
 }));
 

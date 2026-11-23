@@ -12,6 +12,10 @@ CREATE TABLE IF NOT EXISTS prospects (
   active_seconds integer NOT NULL DEFAULT 0
 );
 
+ALTER TABLE prospects ADD COLUMN IF NOT EXISTS ident_key text;   -- prénom|nom|société normalisés : retrouver la même personne
+CREATE INDEX IF NOT EXISTS prospects_ident_idx ON prospects (ident_key);
+CREATE INDEX IF NOT EXISTS prospects_email_idx ON prospects (lower(email));
+
 CREATE TABLE IF NOT EXISTS visits (
   id          uuid PRIMARY KEY,
   prospect_id uuid NOT NULL REFERENCES prospects(id) ON DELETE CASCADE,

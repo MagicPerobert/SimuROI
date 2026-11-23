@@ -74,6 +74,19 @@ try {
 
   assert.equal((await call('/api/admin/prospects/' + r.id, { method: 'DELETE', headers: auth })).status, 200);
   assert.equal((await pool.query('SELECT COUNT(*)::int c FROM events')).rows[0].c, 0); ok('suppression RGPD en cascade');
+  { // même personne, autre navigateur : reconnue sans doublon
+    const count = async () => (await pool.query('SELECT COUNT(*)::int c FROM prospects')).rows[0].c;
+    const id = (e) => ({ method: 'POST', body: JSON.stringify(e) });
+    cookie = ''; assert.equal((await call('/api/profile', id({ first: 'Jeanne', last: 'Martin', company: 'Fromagerie Lenoir', email: 'jm@lenoir.example' }))).status, 200);
+    const tokenA = cookie, n0 = await count();
+    assert.ok((await call('/api/me')).headers.get('set-cookie').includes('mp_vid=')); ok('cookie renouvelé à chaque visite (12 mois glissants)');
+    cookie = ''; await call('/api/profile', id({ first: 'JEANNE', last: 'martin', company: 'fromagerie  lenoir', email: 'JM@LENOIR.EXAMPLE' }));
+    assert.equal(cookie, tokenA); assert.equal(await count(), n0); ok('même e-mail (casse différente) : même personne, pas de doublon');
+    cookie = ''; const same = await (await call('/api/profile', id({ first: 'Jéanne', last: 'Martin', company: 'Fromagerie Lenoir' }))).json();
+    assert.equal(cookie, tokenA); assert.equal(await count(), n0); assert.equal(same.profile.email, ''); ok('même nom + société sans e-mail : retrouvée, e-mail enregistré non divulgué');
+    cookie = ''; await call('/api/profile', id({ first: 'Jeanne', last: 'Martin', company: 'Fromagerie Lenoir', email: 'autre@lenoir.example' }));
+    assert.notEqual(cookie, tokenA); assert.equal(await count(), n0 + 1); ok('homonyme avec un autre e-mail : personne distincte');
+  }
   const bad = { Authorization: 'Basic ' + Buffer.from('admin:x').toString('base64') };
   for (let i = 0; i < 4; i++) assert.equal((await call('/api/admin/prospects', { headers: bad })).status, 401);
   assert.equal((await call('/api/admin/prospects', { headers: bad })).status, 429); ok('blocage après 5 échecs de connexion');
