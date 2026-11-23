@@ -35,6 +35,21 @@ En ligne de commande : `railway init`, `railway add -d postgres`, `railway up`, 
 - Deux homonymes de la même société avec des e-mails différents restent deux fiches distinctes.
 - Les doublons créés avant cette règle ne sont pas fusionnés : supprimez-les depuis `/admin`.
 
+## Fiche prospect
+
+La fiche d'un prospect affiche, pour sa dernière simulation, **toutes ses saisies** (volume, sites, coût facturé par ses transporteurs, heures de suivi, stock, achats d'urgence, palettes perdues, hypothèses) et le **détail du calcul** jusqu'au gain net. Chaque ligne « Simulation » de la chronologie rappelle le volume, les sites et le coût saisis.
+
+## Demandes de recontact
+
+Chaque demande (« En discuter ensemble », démonstration depuis un menu verrouillé, « Parler à un expert ») devient une entrée dans l'onglet **Demandes de recontact** de `/admin`, avec un statut : *À traiter*, *En cours*, *Traitée*.
+
+- La carte donne le contact (lien pour appeler, lien pour écrire), le message, la dernière simulation du prospect et son niveau d'intérêt, un lien vers sa fiche et un champ de note interne enregistré automatiquement.
+- Les demandes les plus anciennes non traitées passent en premier ; après 24 h sans traitement, leur ancienneté s'affiche en orange.
+- Un compteur rouge apparaît dans le menu et dans le titre de l'onglet du navigateur ; la liste des prospects signale ceux qui ont une demande ouverte.
+- Si `NOTIFY_WEBHOOK_URL` et `PUBLIC_URL` sont définis, la notification contient un lien direct vers `/admin#demandes`.
+- Export : bouton « Exporter » (CSV des demandes). La suppression d'un prospect supprime ses demandes.
+- Le blocage de 15 minutes ne compte plus que les refus de mot de passe (401), pas les erreurs ordinaires.
+
 ## Se connecter et se déconnecter
 
 `/admin` demande l'identifiant et le mot de passe (`ADMIN_USER`, `ADMIN_PASSWORD`). Pour sortir : menu de compte en haut à droite → **Se déconnecter**. Si le navigateur garde la session (Safari, par exemple), fermez toutes ses fenêtres ou utilisez une fenêtre privée.

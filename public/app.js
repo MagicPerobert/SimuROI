@@ -35,8 +35,8 @@ const fd=d=>d>=10?String(Math.round(d)):d.toFixed(1).replace('.',',');
 const tierLabel=(t,x)=>{const i=t.findIndex(r=>x<=r[0]),lo=i>0?t[i-1][0]:0;return i===0?`jusqu’à ${nf.format(t[0][0])} palettes par an`:t[i][0]===Infinity?`au-delà de ${nf.format(lo)} palettes par an`:`de ${nf.format(lo+1)} à ${nf.format(t[i][0])} palettes par an`};
 const DEF={volume:120000,sites:2,transporteurs:3,entrepots:5,gestion:null,heures:0,stockAuto:false,stock:0,urgence:0,perdues:0,valPal:9,tauxHoraire:37,taux:8,fraisStock:8};
 const FIELDS={preset:['Exemple choisi',v=>v],volume:['Palettes livrées chez Carrefour / an',v=>nf.format(v)],sites:['Sites d’expédition',v=>v],transporteurs:['Transporteurs',v=>v],entrepots:['Entrepôts Carrefour livrés',v=>v],
- gestion:['Gestion palettes facturée (€ HT / palette)',v=>eur2(v)],heures:['Heures de suivi / mois',v=>v+' h'],
- stock:['Palettes immobilisées',v=>nf.format(v)],urgence:['Palettes achetées en urgence / an',v=>nf.format(v)],perdues:['Palettes non récupérées',v=>v+' %'],
+ gestion:['Coût facturé par les transporteurs (€ HT / palette)',v=>eur2(v)],heures:['Heures de suivi / mois',v=>v+' h'],
+ stock:['Palettes immobilisées',v=>nf.format(v)],urgence:['Palettes achetées en urgence / an',v=>nf.format(v)],perdues:['Palettes non récupérées',v=>String(v).replace('.',',')+' %'],
  valPal:['Valeur d’une palette EUR 2nd choix',v=>eur2(v)],tauxHoraire:['Coût horaire total employeur',v=>eur2(v)],taux:['Coût du capital',v=>v+' %'],fraisStock:['Frais de stockage',v=>v+' %']};
 const estStock=s=>Math.round(Math.min(s.transporteurs*s.entrepots*CFG.pallPerPair,s.volume*0.15));
 function calc(s){
@@ -122,12 +122,13 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAcct()});
 
-const route=()=>{const h=(location.hash||'').slice(1);if(!h&&ADMIN)return'suivi';return PAGES[h]&&(h!=='suivi'||isAdmin)?h:'simuler'};
+const route=()=>{const h=(location.hash||'').slice(1);if(!h&&ADMIN)return'suivi';if(h==='demandes'&&isAdmin)return'suivi';return PAGES[h]&&(h!=='suivi'||isAdmin)?h:'simuler'};
 function renderNav(){
   const cur=route(),cf=CFG.logoCarrefour;let h=`<div class="gl">${cf?`<span class="cfmini"><img src="${CF_IMG}" alt="" width="14" height="11"></span>`:''}Process palettes Carrefour</div><button class="${cur==='simuler'?'on':''}" data-go="simuler" title="Simuler le process palettes Carrefour" aria-label="Simuler mes économies, process palettes Carrefour">${cf?`<span class="ico-wrap">${ic('calc',20)}<i class="cfdot"><img src="${CF_IMG}" alt="" width="9" height="7"></i></span>`:ic('calc',20)}<span class="tx">Simuler mes économies</span></button>`;
   let lg='';for(const [k,m] of Object.entries(MODS)){if(m.g!==lg){lg=m.g;h+=`<div class="gl">${esc(lg)}</div>`}h+=`<button data-lock="${k}" title="Réservé aux clients" aria-label="${esc(m.n)} (réservé aux clients)">${ic(m.i,20)}<span class="tx">${esc(m.s||m.n)}</span><span class="lk">${ic('lock',13)}</span></button>`}
   if(isAdmin)h+=`<div class="sep"></div><div class="gl">Administration</div><button class="${cur==='suivi'?'on':''}" data-go="suivi">${ic('shield',20)}<span class="tx">Suivi des prospects</span></button>`;
   $('#nav').innerHTML=h;
+  if(BO.loaded)setNavBadge(BO.reqs.filter(r=>r.status==='new').length);
   $('#b-side-contact').innerHTML=ic('mail',16)+'<span class="tx">Parler à un expert</span>';
   $('#hb').innerHTML=ic('bars',22);$('#side-x').innerHTML=ic('x',20);$('#tb-talk').innerHTML=ic('phone',15)+'<span class="tb-t">Parler à un expert</span>';
   renderAcct();
@@ -546,13 +547,13 @@ $('#side-x').addEventListener('click',closeSide);$('#side-scrim').addEventListen
 addEventListener('keydown',e=>{if(e.key==='Escape')closeSide()});
 
 /* ---------- back office ---------- */
-const BO={rows:[],filter:'all',poll:null,loaded:false,err:false};
+const BO={rows:[],reqs:[],tab:'prospects',rf:'todo',filter:'all',poll:null,loaded:false,err:false};
 const EVT=e=>{const f=k=>FIELDS[k]?FIELDS[k][0]:k,fv=(k,v)=>FIELDS[k]?FIELDS[k][1](v):v;
  switch(e.type){
   case'profile_set':return'Renseigne son profil';
   case'page_view':return`Consulte « ${esc(PAGES[e.page]||e.page)} »`;
   case'input_change':return`Modifie « ${esc(f(e.k))} » : ${e.from==null?'–':esc(fv(e.k,e.from))} → <b>${esc(fv(e.k,e.to))}</b>`;
-  case'simulation':return`Simulation : gain net <b>${sgn(e.net)}</b> par an, seuil ${eur2(e.seuil)}`;
+  case'simulation':return`Simulation : gain net <b>${sgn(e.net)}</b> par an, seuil ${eur2(e.seuil)}${e.inputs?` · ${nf.format(+e.inputs.volume||0)} palettes, ${+e.inputs.sites||0} sites, ${+e.inputs.gestion>0?eur2(+e.inputs.gestion)+' / palette':'coût non saisi'}`:''}`;
   case'stock_estimate':return'Utilise l’estimation du stock immobilisé';
   case'advanced_open':return e.what==='volume'?'Ouvre « Et si mon volume varie ? »':e.what==='incl'?'Consulte « Ce que comprend votre abonnement »':e.what==='stair'?'Consulte « Paliers de tarif »':(e.what||'').startsWith('horizon')?'Choisit l’horizon des économies ('+esc(e.what.slice(8))+' mois)':(e.what||'').startsWith('why')?'Consulte « Comment on estime ? » ('+esc(e.what.slice(4))+')':'Ouvre les hypothèses avancées';
   case'locked_click':return`Clique sur le menu verrouillé « ${esc(MODS[e.module]?MODS[e.module].n:e.module)} »`;
@@ -565,26 +566,66 @@ const dt=t=>new Date(t).toLocaleString('fr-FR',{day:'2-digit',month:'short',hour
 const dur=s=>s<60?s+' s':Math.round(s/60)+' min';
 const nm=r=>[r.first_name,r.last_name].filter(Boolean).join(' ')||'Visiteur anonyme';
 const api=async(url,opts)=>{const r=await fetch(url,Object.assign({credentials:'same-origin'},opts));if(!r.ok)throw new Error(r.status);return r};
-async function loadBO(){try{BO.rows=(await(await api('/api/admin/prospects')).json()).rows;BO.loaded=true;BO.err=false}catch(e){BO.err=true}drawBO()}
+async function loadBO(){try{const [a,b]=await Promise.all([api('/api/admin/prospects'),api('/api/admin/requests')]);BO.rows=(await a.json()).rows;BO.reqs=(await b.json()).rows;BO.loaded=true;BO.err=false}catch(e){BO.err=true}drawBO()}
 function viewAdmin(){
   $('#view').innerHTML=`<div class="hero-t"><h1>Suivi des prospects</h1><p class="lead">Ce que chaque prospect a fait dans l’espace découverte, et combien de fois.</p></div><div id="bo"></div>`;
-  clearInterval(BO.poll);loadBO();BO.poll=setInterval(()=>{if(route()==='suivi'&&!document.hidden)loadBO()},20000);
+  if(location.hash==='#demandes')BO.tab='demandes';else if(location.hash==='#suivi')BO.tab='prospects';
+  clearInterval(BO.poll);loadBO();BO.poll=setInterval(()=>{if(route()==='suivi'&&!document.hidden&&!(document.activeElement&&document.activeElement.classList.contains('rq-note')))loadBO()},20000);
+}
+const KIND={rappel:'Demande à être rappelé(e)',demo:'Démonstration de la plateforme',rdv:'Demande de rendez-vous'},RST={new:'À traiter',progress:'En cours',done:'Traitée'};
+const ago=t=>{const m=Math.round((Date.now()-Date.parse(t))/60000);if(m<1)return'à l’instant';if(m<60)return`il y a ${m} min`;const h=Math.round(m/60);return h<48?`il y a ${h} h`:`il y a ${Math.round(h/24)} j`};
+function setNavBadge(n){const b=document.querySelector('#nav [data-go="suivi"]');if(!b)return;let i=b.querySelector('.nb');if(!n){if(i)i.remove();return}if(!i){i=document.createElement('i');i.className='nb new';b.appendChild(i)}i.textContent=n}
+async function patchReq(id,patch,reload){
+  try{const r=await api('/api/admin/requests/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)});const j=await r.json();
+    const k=BO.reqs.findIndex(x=>String(x.id)===String(id));if(k>=0)BO.reqs[k]=Object.assign({},BO.reqs[k],j.request);
+    if(reload)await loadBO();else toast('Note enregistrée')}catch(e){toast('Enregistrement impossible')}
 }
 function drawBO(){
   if(route()!=='suivi'||!$('#bo'))return;
   if(BO.err&&!BO.loaded){$('#bo').innerHTML=`<div class="empty">Impossible de charger les données.</div>`;return}
+  const nNew=BO.reqs.filter(r=>r.status==='new').length,nOpen=BO.reqs.filter(r=>r.status!=='done').length;
+  document.title=(nNew?`(${nNew}) `:'')+'Suivi des prospects · MagicPallet';setNavBadge(nNew);
+  $('#bo').innerHTML=`<div class="bo-tabs" role="tablist">${[['prospects','Prospects',0],['demandes','Demandes de recontact',nOpen]].map(([k,l,n])=>`<button role="tab" aria-selected="${BO.tab===k}" data-t="${k}" class="${BO.tab===k?'on':''}">${l}${n?`<i class="nb${nNew&&k==='demandes'?' new':''}">${n}</i>`:''}</button>`).join('')}</div><div id="bo-b"></div>`;
+  $$('#bo [data-t]').forEach(b=>b.addEventListener('click',()=>{BO.tab=b.dataset.t;history.replaceState(null,'',BO.tab==='demandes'?'#demandes':'#suivi');drawBO()}));
+  if(BO.tab==='demandes')drawReqs();else drawProspects();
+}
+function drawReqs(){
+  const all=BO.reqs,c={todo:0,progress:0,done:0},rank={new:0,progress:1,done:2},t=x=>Date.parse(x);
+  all.forEach(r=>{c[r.status==='new'?'todo':r.status]++});
+  const srt=(a,b)=>rank[a.status]-rank[b.status]||(a.status==='done'?t(b.handled_at||b.created_at)-t(a.handled_at||a.created_at):t(a.created_at)-t(b.created_at));
+  const vis=all.filter(r=>BO.rf==='all'||(BO.rf==='todo'?r.status==='new':r.status===BO.rf)).sort(srt);
+  const card=r=>{const p=r.prospect||{},name=[p.first_name,p.last_name].filter(Boolean).join(' ')||'Visiteur',em=r.email||p.email,tel=r.tel;
+    const late=r.status==='new'&&(Date.now()-t(r.created_at))>24*36e5,origin=r.origin&&MODS[r.origin]?` · depuis « ${esc(MODS[r.origin].n)} »`:'';
+    const l=p.last_sim,sn=l?`Dernière simulation : ${nf.format((l.inputs&&l.inputs.volume)||0)} palettes · gain net <b class="${l.net>=0?'pos':'neg'}">${sgn(l.net)}</b> par an`:'Pas encore de simulation',sc=p.score?` · intérêt ${p.score.total} (${{hot:'chaud',warm:'tiède',cold:'froid'}[p.score.label]})`:'',nv=p.visits||0;
+    return `<article class="rq-c st-${r.status}"><div class="rq-h"><span class="rq-s">${RST[r.status]}</span><span class="rq-k">${KIND[r.kind]||'Demande de contact'}${origin}</span><span class="rq-w${late?' late':''}" title="${esc(dt(r.created_at))}">reçue ${ago(r.created_at)}${r.status==='done'&&r.handled_at?` · traitée ${ago(r.handled_at)}`:''}</span></div>
+     <div class="rq-who"><b>${esc(name)}</b><span>${esc(p.company||'')}</span></div>
+     <div class="rq-ct">${tel?`<a class="btn primary sm" href="tel:${esc(tel.replace(/[^\d+]/g,''))}">${ic('phone',14)}<span>Appeler ${esc(tel)}</span></a>`:''}${em?`<a class="btn ${tel?'ghost ':'primary '}sm" href="mailto:${esc(em)}?subject=${encodeURIComponent('Votre simulation MagicPallet')}">${ic('mail',14)}<span>${esc(em)}</span></a>`:''}${!tel&&!em?'<span class="neg">Aucune coordonnée : voir sa fiche.</span>':''}</div>
+     ${r.msg?`<blockquote>« ${esc(r.msg)} »</blockquote>`:''}
+     <div class="rq-sn">${sn}${sc} · ${nv} visite${nv>1?'s':''} · <button data-open="${esc(p.id||'')}">Voir la fiche</button></div>
+     <textarea class="rq-note" data-note="${r.id}" aria-label="Note interne" placeholder="Note interne, enregistrée automatiquement">${esc(r.note||'')}</textarea>
+     <div class="rq-f">${r.status==='new'?`<button class="btn ghost sm" data-act="progress" data-id="${r.id}">Prendre en charge</button>`:''}${r.status!=='done'?`<button class="btn primary sm" data-act="done" data-id="${r.id}">${ic('check',14)}<span>Marquer traitée</span></button>`:`<button class="btn ghost sm" data-act="new" data-id="${r.id}">Rouvrir</button>`}</div></article>`};
+  const empty={todo:'Aucune demande à traiter. Quand un visiteur demande à être rappelé, elle apparaît ici et vous êtes notifié(e).',progress:'Aucune demande en cours.',done:'Aucune demande traitée pour le moment.',all:'Aucune demande de recontact pour le moment.'}[BO.rf];
+  $('#bo-b').innerHTML=`<div class="bar-t"><div class="seg" role="group" aria-label="Filtrer les demandes">${[['todo','À traiter',c.todo],['progress','En cours',c.progress],['done','Traitées',c.done],['all','Toutes',all.length]].map(([k,l,n])=>`<button data-rf="${k}" class="${BO.rf===k?'on':''}">${l} (${n})</button>`).join('')}</div><span style="flex:1"></span><a class="btn ghost sm" href="/api/admin/requests.csv" download>${ic('download',14)}<span>Exporter</span></a></div>
+   ${vis.length?`<div class="rq-list">${vis.map(card).join('')}</div>`:`<div class="empty">${empty}</div>`}`;
+  $$('#bo-b [data-rf]').forEach(b=>b.addEventListener('click',()=>{BO.rf=b.dataset.rf;drawBO()}));
+  $$('#bo-b [data-act]').forEach(b=>b.addEventListener('click',()=>patchReq(b.dataset.id,{status:b.dataset.act},true)));
+  $$('#bo-b [data-note]').forEach(a=>a.addEventListener('change',()=>patchReq(a.dataset.note,{note:a.value},false)));
+  $$('#bo-b [data-open]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.open)openProspect(b.dataset.open)}));
+}
+function drawProspects(){
   const rows=BO.rows,vis=rows.filter(r=>BO.filter==='all'||r.score.label===BO.filter);
-  const sims=rows.reduce((a,b)=>a+b.sims,0),visits=rows.reduce((a,b)=>a+b.visits,0),contacts=rows.filter(r=>r.contacted).length;
-  $('#bo').innerHTML=`<div class="kpis"><div class="kpi"><b>${rows.length}</b><span>Prospects</span></div><div class="kpi"><b>${visits}</b><span>Visites</span></div><div class="kpi"><b>${sims}</b><span>Simulations</span></div><div class="kpi"><b>${contacts}</b><span>Demandes de contact</span></div></div>
+  const sims=rows.reduce((a,b)=>a+b.sims,0),visits=rows.reduce((a,b)=>a+b.visits,0),contacts=BO.reqs.filter(r=>r.status!=='done').length;
+  $('#bo-b').innerHTML=`<div class="kpis"><div class="kpi"><b>${rows.length}</b><span>Prospects</span></div><div class="kpi"><b>${visits}</b><span>Visites</span></div><div class="kpi"><b>${sims}</b><span>Simulations</span></div><div class="kpi link" id="kpi-req" tabindex="0" role="button"><b>${contacts}</b><span>Demandes à traiter</span></div></div>
   <div class="bar-t"><div class="seg" role="group" aria-label="Filtrer">${[['all','Tous'],['hot','Chauds'],['warm','Tièdes'],['cold','Froids']].map(([k,l])=>`<button data-f="${k}" class="${BO.filter===k?'on':''}">${l}</button>`).join('')}</div>
    <span style="flex:1"></span><button class="btn primary sm" id="bo-inv">${ic('userplus',14)}<span>Nouvelle invitation</span></button><a class="btn ghost sm" href="/api/admin/export.csv" download>${ic('download',14)}<span>Exporter</span></a></div>
   ${vis.length?`<div class="tbl-w"><table class="tbl"><thead><tr><th>Prospect</th><th>Intérêt</th><th>Dernière activité</th><th>Visites</th><th>Temps actif</th><th>Simulations</th><th>Menus verrouillés</th><th>Dernier gain simulé</th></tr></thead><tbody>
   ${vis.map(r=>{const lk=Object.entries(r.locked_by||{}).sort((a,b)=>b[1]-a[1]).map(([k,n])=>`${esc(MODS[k]?MODS[k].n:k)} ×${n}`).join(', ')||'–';
-   return `<tr class="r" tabindex="0" data-id="${esc(r.id)}"><td class="who"><b>${esc(nm(r))}</b><small>${esc(r.company||'–')}</small></td><td><span class="sc ${r.score.label}">${ic('fire',12)}${r.score.total} · ${{hot:'Chaud',warm:'Tiède',cold:'Froid'}[r.score.label]}</span></td><td>${dt(r.last_seen)}</td><td>${r.visits}</td><td>${dur(r.active_seconds)}</td><td>${r.sims}</td><td>${lk}</td><td>${r.last_sim?`<b class="${r.last_sim.net>=0?'pos':'neg'}">${sgn(r.last_sim.net)}</b>`:'–'}</td></tr>`}).join('')}</tbody></table></div>`
+   return `<tr class="r" tabindex="0" data-id="${esc(r.id)}"><td class="who"><b>${esc(nm(r))}</b><small>${esc(r.company||'–')}</small>${r.open_req?`<span class="rq${r.new_req?' new':''}">${ic('phone',11)}${r.new_req?'Rappel à faire':'Demande en cours'}</span>`:''}</td><td><span class="sc ${r.score.label}">${ic('fire',12)}${r.score.total} · ${{hot:'Chaud',warm:'Tiède',cold:'Froid'}[r.score.label]}</span></td><td>${dt(r.last_seen)}</td><td>${r.visits}</td><td>${dur(r.active_seconds)}</td><td>${r.sims}</td><td>${lk}</td><td>${r.last_sim?`<b class="${r.last_sim.net>=0?'pos':'neg'}">${sgn(r.last_sim.net)}</b>`:'–'}</td></tr>`}).join('')}</tbody></table></div>`
   :`<div class="empty">${rows.length?'Aucun prospect dans ce filtre.':'Aucune activité pour le moment. Créez une invitation pour envoyer un lien personnel à un prospect.'}</div>`}`;
   $$('#bo [data-f]').forEach(b=>b.addEventListener('click',()=>{BO.filter=b.dataset.f;drawBO()}));
   $$('#bo tr.r').forEach(tr=>{const o=()=>openProspect(tr.dataset.id);tr.addEventListener('click',o);tr.addEventListener('keydown',e=>{if(e.key==='Enter')o()})});
   $('#bo-inv').addEventListener('click',openInvite);
+  const kr=$('#kpi-req'),go=()=>{BO.tab='demandes';history.replaceState(null,'','#demandes');drawBO()};kr.addEventListener('click',go);kr.addEventListener('keydown',e=>{if(e.key==='Enter')go()});
 }
 function openInvite(){
   openModal(`<button class="x" style="all:unset;cursor:pointer;position:absolute;top:16px;right:16px;padding:8px;color:var(--muted)" id="mx" aria-label="Fermer">${ic('x',18)}</button><h2>Nouvelle invitation</h2><p>Un lien personnel : chaque visite de ce prospect lui sera attribuée, sans qu’il ait à se présenter.</p>
@@ -597,11 +638,28 @@ function openInvite(){
       $('#inv-copy').addEventListener('click',()=>copyText(j.url));$('#inv-ok').addEventListener('click',closeModal);loadBO()}catch(err){toast('Création impossible')}});
 }
 async function copyText(t){try{await navigator.clipboard.writeText(t);toast('Lien copié')}catch(e){const i=$('#inv-url');if(i){i.select();toast('Sélectionné : copiez avec Ctrl+C')}}}
+function simBlock(l){
+  const i=l.inputs||{},c=calc(i),D=(a,b)=>`<span>${a}</span><span>${b}</span>`,N=x=>nf.format(Math.round(+x||0));
+  const g=+i.gestion>0?`${eur2(+i.gestion)} / palette`:'non renseigné';
+  const stock=i.stockAuto?`${N(c.stock)} palettes (estimation : ${i.transporteurs||'?'} transporteurs × ${i.entrepots||'?'} entrepôts)`:`${N(c.stock)} palettes (saisi)`;
+  const diff=Math.abs(c.total-l.total)>1||Math.abs(c.mp.total-l.mpTotal)>1;
+  return `<div><h4 style="margin:0 0 8px">Dernière simulation : ce qu’il a saisi</h4><div class="bk">${[
+    D('Palettes livrées chez Carrefour',N(i.volume)+' / an'),D('Sites d’expédition',N(i.sites)),D('Facturé par ses transporteurs',g),
+    D('Temps de suivi',(+i.heures||0)+' h / mois'),D('Stock immobilisé',stock),D('Achats d’urgence',N(i.urgence)+' palettes / an'),D('Palettes jamais récupérées',String(+i.perdues||0).replace('.',',')+' %'),
+    D('Hypothèses',`palette ${eur2(+i.valPal||0)} · ${eur2(+i.tauxHoraire||0)} / h · capital ${+i.taux||0} % · stockage ${+i.fraisStock||0} %`)].join('')}</div></div>
+   <div><h4 style="margin:0 0 8px">Comment on arrive à ${sgn(l.net)}</h4><div class="bk">${[
+    D('Gestion palettes facturée',eur(c.it.gestion)),D('Temps de suivi',eur(c.it.temps)),D('Stock immobilisé',eur(c.it.stock)),D('Achats d’urgence',eur(c.it.urgence)),D('Palettes perdues',eur(c.it.perdues)),
+    D('<b>Coûts actuels</b>',`<b>${eur(c.total)}</b>`),
+    D('Relocalisation',`${N(i.volume)} × ${eur2(c.mp.unit)} = ${eur(c.mp.reloc)}`),D('Abonnement',`(${N(c.mp.logM)} + ${N(c.mp.conM)}) × 12 = ${eur(c.mp.logiciel+c.mp.conso)}`),
+    D('<b>Coût MagicPallet</b>',`<b>${eur(c.mp.total)}</b>`),
+    `<span><b>Gain net</b></span><span class="${l.net>=0?'pos':'neg'}"><b>${sgn(l.net)}</b></span>`].join('')}</div>
+   ${diff?'<p class="hint" style="margin:6px 0 0">Les tarifs ont changé depuis cette simulation : le détail est recalculé avec la grille actuelle.</p>':''}</div>`;
+}
 async function openProspect(id){
   const s=BO.rows.find(r=>r.id===id);if(!s)return;const sc=s.score,l=s.last_sim;
   openDrawer(`<span class="tag">${ic('fire',12)}Intérêt ${sc.total} / 100</span><h2>${esc(nm(s))}</h2><p style="margin:-6px 0 0;color:var(--muted)">${esc(s.company||'')}${s.email?' · '+esc(s.email):''}</p>
    <div><h4 style="margin:0 0 8px">Pourquoi ce score</h4><div class="bk">${sc.parts.map(p=>`<span>${esc(p[0])}</span><span>+${p[1]}</span>`).join('')}</div></div>
-   ${l?`<div><h4 style="margin:0 0 8px">Dernière simulation</h4><div class="bk"><span>Volume annuel</span><span>${nf.format((l.inputs&&l.inputs.volume)||0)} palettes</span><span>Coûts actuels</span><span>${eur(l.total)}</span><span>Coût MagicPallet</span><span>${eur(l.mpTotal)}</span><span>Gain net</span><span class="${l.net>=0?'pos':'neg'}">${sgn(l.net)}</span></div></div>`:''}
+   ${l?simBlock(l):''}
    <div id="tl"><h4 style="margin:0 0 4px">Chronologie</h4><p class="hint">Chargement…</p></div><div id="acts" style="display:flex;flex-direction:column;gap:10px"></div>`);
   try{
    const d=await(await api('/api/admin/prospects/'+id)).json();

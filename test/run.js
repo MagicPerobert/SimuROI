@@ -87,6 +87,32 @@ try {
     cookie = ''; await call('/api/profile', id({ first: 'Jeanne', last: 'Martin', company: 'Fromagerie Lenoir', email: 'autre@lenoir.example' }));
     assert.notEqual(cookie, tokenA); assert.equal(await count(), n0 + 1); ok('homonyme avec un autre e-mail : personne distincte');
   }
+  { // boîte des demandes de recontact : création, statuts, notes
+    const J = (b) => ({ method: 'POST', body: JSON.stringify(b) }), P = (b) => ({ method: 'PATCH', headers: { ...auth, 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+    cookie = ''; await call('/api/profile', J({ first: 'Paul', last: 'Dumas', company: 'Brasserie du Nord', email: 'paul@nord.example' }));
+    const pid = (await (await call('/api/admin/prospects', { headers: auth })).json()).rows.find((r) => r.company === 'Brasserie du Nord').id;
+    const visit = crypto.randomUUID();
+    await call('/api/track', J({ visit, active: 5, events: [{ type: 'contact_open', ctx: 'simulation' }, { type: 'contact_request', ctx: 'simulation', mode: 'call', tel: '06 11 22 33 44', msg: 'Rappelez-moi demain matin' }, { type: 'contact_request', ctx: 'demo', from: 'dashboard', email: 'paul@nord.example' }] }));
+    const list = async () => (await (await call('/api/admin/requests', { headers: auth })).json()).rows;
+    const mine = (await list()).filter((r) => r.prospect.id === pid);
+    assert.equal(mine.length, 2); assert.ok(mine.every((r) => r.status === 'new'));
+    const rappel = mine.find((r) => r.kind === 'rappel'), demo = mine.find((r) => r.kind === 'demo');
+    assert.equal(rappel.tel, '06 11 22 33 44'); assert.equal(rappel.msg, 'Rappelez-moi demain matin'); assert.equal(demo.origin, 'dashboard'); assert.equal(rappel.prospect.company, 'Brasserie du Nord'); ok('une demande de recontact crée une entrée « à traiter »');
+    const row = (await (await call('/api/admin/prospects', { headers: auth })).json()).rows.find((r) => r.id === pid);
+    assert.equal(row.open_req, 2); assert.equal(row.new_req, 2); ok('la liste des prospects signale les demandes ouvertes');
+    let r1 = await call('/api/admin/requests/' + rappel.id, P({ status: 'progress' })); assert.equal((await r1.json()).request.status, 'progress');
+    r1 = await (await call('/api/admin/requests/' + rappel.id, P({ status: 'done', note: 'Rappelé, RDV jeudi 10 h' }))).json();
+    assert.equal(r1.request.status, 'done'); assert.ok(r1.request.handled_at); assert.equal(r1.request.note, 'Rappelé, RDV jeudi 10 h'); ok('statuts et note enregistrés, date de traitement posée');
+    r1 = await (await call('/api/admin/requests/' + rappel.id, P({ status: 'new' }))).json(); assert.equal(r1.request.handled_at, null); ok('une demande rouverte perd sa date de traitement');
+    assert.equal((await call('/api/admin/requests/' + rappel.id, P({ status: 'nimporte' }))).status, 400);
+    assert.equal((await call('/api/admin/requests/999999', P({ note: 'x' }))).status, 404);
+    assert.equal((await call('/api/admin/requests/' + rappel.id, P({}))).status, 400); ok('statut inconnu, demande absente et corps vide refusés');
+    for (let i = 0; i < 6; i++) await call('/api/admin/requests/999999', P({ note: 'x' }));   // des erreurs ordinaires (404) ne bloquent pas l'administrateur
+    assert.equal((await call('/api/admin/prospects', { headers: auth })).status, 200); ok('des erreurs 404 répétées ne verrouillent pas l’administrateur');
+    const csvTxt = await (await call('/api/admin/requests.csv', { headers: auth })).text(); assert.ok(csvTxt.includes('Brasserie du Nord') && csvTxt.includes('Rappelé, RDV')); ok('export CSV des demandes');
+    await call('/api/admin/prospects/' + pid, { method: 'DELETE', headers: auth });
+    assert.equal((await list()).filter((r) => r.prospect.id === pid).length, 0); ok('suppression d’un prospect : ses demandes disparaissent aussi');
+  }
   const bad = { Authorization: 'Basic ' + Buffer.from('admin:x').toString('base64') };
   for (let i = 0; i < 4; i++) assert.equal((await call('/api/admin/prospects', { headers: bad })).status, 401);
   assert.equal((await call('/api/admin/prospects', { headers: bad })).status, 429); ok('blocage après 5 échecs de connexion');

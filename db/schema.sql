@@ -34,3 +34,20 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_prospect_idx ON events (prospect_id, at);
 CREATE INDEX IF NOT EXISTS events_type_idx ON events (type);
+
+-- Demandes de recontact : une ligne par demande, avec un statut de traitement.
+CREATE TABLE IF NOT EXISTS requests (
+  id          bigserial PRIMARY KEY,
+  prospect_id uuid NOT NULL REFERENCES prospects(id) ON DELETE CASCADE,
+  kind        text NOT NULL DEFAULT 'rappel',   -- rappel | demo | rdv
+  origin      text,                              -- d'où vient la demande (ex. menu verrouillé)
+  tel         text,
+  email       text,
+  msg         text,
+  status      text NOT NULL DEFAULT 'new',      -- new | progress | done
+  note        text NOT NULL DEFAULT '',
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  handled_at  timestamptz
+);
+CREATE INDEX IF NOT EXISTS requests_status_idx ON requests (status, created_at);
+CREATE INDEX IF NOT EXISTS requests_prospect_idx ON requests (prospect_id);

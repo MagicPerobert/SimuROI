@@ -20,6 +20,11 @@ export async function migrate() {
   await pool.query(fs.readFileSync(path.join(__dirname, 'db/schema.sql'), 'utf8'));
   const old = await pool.query("SELECT id, first_name, last_name, company FROM prospects WHERE ident_key IS NULL");
   for (const r of old.rows) await pool.query('UPDATE prospects SET ident_key = $2 WHERE id = $1', [r.id, identKey(r.first_name, r.last_name, r.company)]);
+  await pool.query(`INSERT INTO requests(prospect_id, kind, origin, tel, email, msg, created_at)
+    SELECT e.prospect_id, CASE WHEN e.data->>'mode' = 'rdv' THEN 'rdv' WHEN e.data->>'ctx' = 'demo' THEN 'demo' ELSE 'rappel' END,
+      NULLIF(e.data->>'from',''), NULLIF(e.data->>'tel',''), NULLIF(e.data->>'email',''), NULLIF(e.data->>'msg',''), e.at
+    FROM events e WHERE e.type = 'contact_request'
+      AND NOT EXISTS (SELECT 1 FROM requests r WHERE r.prospect_id = e.prospect_id AND r.created_at = e.at)`);
 }
 
 /* ---------- utilitaires ---------- */
@@ -62,7 +67,7 @@ export function scoreOf(r) {
 const AGG_SQL = `
 SELECT p.id, p.token, p.first_name, p.last_name, p.company, p.email, p.source, p.created_at, p.last_seen, p.active_seconds,
   COALESCE(a.sims,0)::int sims, COALESCE(a.fields,0)::int fields, COALESCE(a.locked_total,0)::int locked_total,
-  COALESCE(a.exported,false) exported, COALESCE(a.contacted,false) contacted,
+  COALESCE(a.exported,false) exported, COALESCE(a.contacted,false) contacted, COALESCE(q.open_req,0)::int open_req, COALESCE(q.new_req,0)::int new_req,
   (SELECT COUNT(*) FROM visits v WHERE v.prospect_id = p.id)::int visits,
   (SELECT COUNT(DISTINCT (v.started_at AT TIME ZONE 'Europe/Paris')::date) FROM visits v WHERE v.prospect_id = p.id)::int days,
   (SELECT jsonb_object_agg(m, n) FROM (SELECT data->>'module' m, COUNT(*) n FROM events WHERE prospect_id = p.id AND type = 'locked_click' GROUP BY 1) s) locked_by,
@@ -76,7 +81,10 @@ LEFT JOIN (
     BOOL_OR(type = 'export') exported,
     BOOL_OR(type = 'contact_request') contacted
   FROM events GROUP BY prospect_id
-) a ON a.prospect_id = p.id`;
+) a ON a.prospect_id = p.id
+LEFT JOIN (
+  SELECT prospect_id, COUNT(*) FILTER (WHERE status <> 'done') open_req, COUNT(*) FILTER (WHERE status = 'new') new_req FROM requests GROUP BY prospect_id
+) q ON q.prospect_id = p.id`;
 const aggRows = async (where = '', params = []) => {
   const { rows } = await pool.query(`${AGG_SQL} ${where} ORDER BY p.last_seen DESC`, params);
   return rows.map((r) => ({ ...r, locked_by: r.locked_by || {}, score: scoreOf(r) }));
@@ -87,7 +95,7 @@ async function notifyContact(p, ev) {
   const url = process.env.NOTIFY_WEBHOOK_URL;
   if (!url) return;
   const who = [p.first_name, p.last_name].filter(Boolean).join(' ') || 'Visiteur';
-  const text = `Demande de contact : ${who} (${p.company || '–'}) · contexte : ${ev.ctx === 'demo' ? 'démo de la plateforme' + (ev.from ? ' (depuis ' + ev.from + ')' : '') : ev.ctx || 'simulation'} · ${ev.mode === 'rdv' ? 'rendez-vous souhaité : ' + [ev.date, ev.slot].filter(Boolean).join(', ') + ' · ' : ''}${ev.tel || ev.email || p.email || 'sans coordonnée'}${ev.msg ? ' · « ' + ev.msg + ' »' : ''}`;
+  const text = `Demande de contact : ${who} (${p.company || '–'}) · contexte : ${ev.ctx === 'demo' ? 'démo de la plateforme' + (ev.from ? ' (depuis ' + ev.from + ')' : '') : ev.ctx || 'simulation'} · ${ev.mode === 'rdv' ? 'rendez-vous souhaité : ' + [ev.date, ev.slot].filter(Boolean).join(', ') + ' · ' : ''}${ev.tel || ev.email || p.email || 'sans coordonnée'}${ev.msg ? ' · « ' + ev.msg + ' »' : ''}${process.env.PUBLIC_URL ? ' · ' + process.env.PUBLIC_URL.replace(/\/$/, '') + '/admin#demandes' : ''}`;
   try { await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, content: text }) }); } catch { /* best effort */ }
 }
 
@@ -180,6 +188,11 @@ app.post('/api/track', limiter(120), jsonBody, wrap(async (req, res) => {
       evs.forEach((e, i) => { vals.push(`($${i * 5 + 1},$${i * 5 + 2},$${i * 5 + 3},$${i * 5 + 4}::jsonb,$${i * 5 + 5})`); args.push(p.id, visit, e.type, e.json, e.at); });
       await client.query(`INSERT INTO events(prospect_id, visit_id, type, data, at) VALUES ${vals.join(',')}`, args);
     }
+    for (const e of evs.filter((x) => x.type === 'contact_request')) {
+      const r = e.raw;
+      await client.query('INSERT INTO requests(prospect_id, kind, origin, tel, email, msg, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+        [p.id, r.mode === 'rdv' ? 'rdv' : r.ctx === 'demo' ? 'demo' : 'rappel', cut(r.from, 80) || null, cut(r.tel, 40) || null, cut(r.email, 160) || null, cut(r.msg, 400) || null, e.at]);
+    }
     await client.query('UPDATE prospects SET last_seen = now(), active_seconds = active_seconds + $2 WHERE id = $1', [p.id, clamp(parseInt(b.active, 10) || 0, 0, 600)]);
     await client.query('COMMIT');
   } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
@@ -208,7 +221,8 @@ app.get('/admin/logout', (req, res) => {
 });
 
 // Blocage 15 min après 5 identifiants erronés (seules les tentatives avec en-tête Authorization comptent).
-const failedLogins = rateLimit({ windowMs: 15 * 60_000, max: 5, skipSuccessfulRequests: true, skip: (req) => !req.headers.authorization,
+// Seuls les refus d'authentification (401) comptent : une simple erreur 400/404 ne doit jamais bloquer l'administrateur.
+const failedLogins = rateLimit({ windowMs: 15 * 60_000, max: 5, skipSuccessfulRequests: true, requestWasSuccessful: (_req, res) => res.statusCode !== 401, skip: (req) => !req.headers.authorization,
   standardHeaders: true, legacyHeaders: false, message: 'Trop de tentatives. Réessayez dans quelques minutes.' });
 app.use(['/admin', '/api/admin'], rateLimit({ windowMs: 60_000, max: 300, standardHeaders: true, legacyHeaders: false }), failedLogins, adminAuth);
 app.get('/admin', (_req, res) => { noStore(res); res.type('html').send(adminHtml); });
@@ -243,7 +257,37 @@ app.delete('/api/admin/prospects/:id', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+const REQ_STATUS = new Set(['new', 'progress', 'done']);
+app.get('/api/admin/requests', wrap(async (_req, res) => {
+  noStore(res);
+  const { rows } = await pool.query('SELECT * FROM requests ORDER BY created_at DESC LIMIT 1000');
+  const pr = new Map((await aggRows()).map((r) => [r.id, r]));
+  res.json({ rows: rows.map((q) => { const p = pr.get(q.prospect_id) || {}; return { ...q, prospect: { id: p.id, first_name: p.first_name, last_name: p.last_name, company: p.company, email: p.email, visits: p.visits, score: p.score, last_sim: p.last_sim } }; }) });
+}));
+app.patch('/api/admin/requests/:id', jsonBody, wrap(async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(404).json({ error: 'not_found' });
+  const b = req.body || {}, sets = [], args = [id];
+  if (b.status !== undefined) {
+    if (!REQ_STATUS.has(b.status)) return res.status(400).json({ error: 'invalid' });
+    args.push(b.status); sets.push(`status = $${args.length}`, `handled_at = ${b.status === 'done' ? 'now()' : 'NULL'}`);
+  }
+  if (b.note !== undefined) { args.push(cut(b.note, 2000)); sets.push(`note = $${args.length}`); }
+  if (!sets.length) return res.status(400).json({ error: 'invalid' });
+  const { rows } = await pool.query(`UPDATE requests SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, args);
+  if (!rows[0]) return res.status(404).json({ error: 'not_found' });
+  res.json({ request: rows[0] });
+}));
+
 const csv = (v) => { v = v == null ? '' : String(v); return /[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+app.get('/api/admin/requests.csv', wrap(async (_req, res) => {
+  const { rows } = await pool.query(`SELECT q.*, p.first_name, p.last_name, p.company, p.email p_email FROM requests q JOIN prospects p ON p.id = q.prospect_id ORDER BY q.created_at DESC`);
+  const lab = { rappel: 'Rappel', demo: 'Démo', rdv: 'Rendez-vous' }, st = { new: 'À traiter', progress: 'En cours', done: 'Traitée' };
+  const lines = [['Reçue le', 'Statut', 'Type', 'Prénom', 'Nom', 'Société', 'Téléphone', 'E-mail', 'Message', 'Origine', 'Note', 'Traitée le'],
+    ...rows.map((r) => [r.created_at.toISOString(), st[r.status], lab[r.kind], r.first_name, r.last_name, r.company, r.tel, r.email || r.p_email, r.msg, r.origin, r.note, r.handled_at ? r.handled_at.toISOString() : ''])];
+  res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="demandes-recontact.csv"' });
+  res.send('\ufeff' + lines.map((l) => l.map(csv).join(';')).join('\n'));
+}));
 app.get('/api/admin/export.csv', wrap(async (_req, res) => {
   const rows = await aggRows();
   const head = ['Prénom', 'Nom', 'Société', 'E-mail', 'Score', 'Première visite', 'Dernière activité', 'Visites', 'Temps actif (s)', 'Simulations', 'Menus verrouillés', 'Contact demandé', 'Dernier gain simulé (€)'];
